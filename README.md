@@ -94,6 +94,20 @@ Columns `c` and `d` are hidden in reading and live-preview mode, while the
 formulas keep working. The directive cell itself renders empty. The underlying
 markdown is unchanged, so switch to source mode to see or edit hidden columns.
 
+### Fill down
+Place the cursor in a cell that contains a formula and run **CalcCraft: Fill
+formula down** (command palette, or the editor right-click menu). The formula is
+copied into every row below it in the same column, with references adjusted just
+like dragging the fill handle in a spreadsheet:
+
+- `a1`-style references shift with the row (`=a2+b2` becomes `=a3+b3`, ...)
+- `$` anchors stay put (`$b$1` keeps pointing at `b1` in every filled row)
+- the `c`/`r` relative notation is left unchanged (it is already relative)
+
+The filled formulas are written into the note's markdown, so they persist and
+can be edited individually afterwards. Filling overwrites the target cells down
+to the end of the table.
+
 ### Matrix and Range Operations
 Ranges between `[...]` are expanded as matrices and can be used for matrix operations:
 - **Standard ranges**: `a1:c3` flattens to a 1D array for functions like `sum()`

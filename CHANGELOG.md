@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Fill down**: the *CalcCraft: Fill formula down* command (also in the editor
+  right-click menu) copies the formula in the current cell down its column to
+  the end of the table, adjusting `a1`-style references per row while keeping
+  `$`-anchored and `c`/`r` relative references intact. The result is written to
+  the markdown so the formulas persist.
 - **Hide columns**: a `=hide(c, d, e)` directive (ranges like `c:e` allowed) in
   any cell hides those columns in reading/live-preview mode while keeping the
   formulas working. The directive cell renders empty; the markdown is unchanged.

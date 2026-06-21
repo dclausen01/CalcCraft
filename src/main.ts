@@ -1,7 +1,7 @@
 
-import { Plugin, MarkdownPostProcessorContext, App, MarkdownView, debounce, TFile } from "obsidian";
+import { Plugin, MarkdownPostProcessorContext, App, MarkdownView, debounce, TFile, Editor, Menu, Notice } from "obsidian";
 import { CalcCraftSettingsTab, DefaultSettings } from "./settings";
-import { TableEvaluator } from "./table-evaluator";
+import { TableEvaluator, shiftFormula } from "./table-evaluator";
 
 const debug = false;
 
@@ -30,6 +30,23 @@ export default class CalcCraftPlugin extends Plugin {
 		this.addSettingTab(this.settings_tab);
 		this.debug("table formula plugin loaded");
 		this.settings_tab.reloadPages();
+
+		// Fill-down: copy a formula down its column, adjusting references.
+		this.addCommand({
+			id: "fill-formula-down",
+			name: "Fill formula down",
+			editorCallback: (editor: Editor) => this.fillFormulaDown(editor)
+		});
+		this.registerEvent(
+			this.app.workspace.on("editor-menu", (menu: Menu, editor: Editor) => {
+				menu.addItem(item =>
+					item
+						.setTitle("CalcCraft: Fill formula down")
+						.setIcon("arrow-down")
+						.onClick(() => this.fillFormulaDown(editor))
+				);
+			})
+		);
 
 		// Add Live Preview support:
 		this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.attachLivePreviewHooks()));
@@ -366,6 +383,69 @@ export default class CalcCraftPlugin extends Plugin {
 		this.applyHiddenColumns(result.hiddenColumns);
 
 		this.addTableEventListeners(tableEl);
+	}
+
+	/**
+	 * Fill the formula in the cell under the cursor down its column, to the end
+	 * of the current markdown table, adjusting references via shiftFormula.
+	 * Operates on the source text, so the filled formulas persist in the note.
+	 */
+	private fillFormulaDown(editor: Editor): void {
+		const cursor = editor.getCursor();
+		const lineCount = editor.lineCount();
+		const isTableLine = (n: number) =>
+			n >= 0 && n < lineCount && editor.getLine(n).includes("|");
+
+		if (!isTableLine(cursor.line)) {
+			new Notice("CalcCraft: place the cursor in a table cell");
+			return;
+		}
+
+		// Determine the contiguous table block around the cursor.
+		let start = cursor.line;
+		let end = cursor.line;
+		while (isTableLine(start - 1)) start--;
+		while (isTableLine(end + 1)) end++;
+
+		// The separator row (|---|---|) marks the boundary between header and data.
+		const isSeparator = (n: number) =>
+			/^[\s|:-]+$/.test(editor.getLine(n)) && editor.getLine(n).includes("-");
+		let separator = -1;
+		for (let n = start; n <= end; n++) {
+			if (isSeparator(n)) {
+				separator = n;
+				break;
+			}
+		}
+		if (separator === -1 || cursor.line <= separator) {
+			new Notice("CalcCraft: place the cursor on a data row below the header");
+			return;
+		}
+
+		// Column index = number of pipes before the cursor on its line. The same
+		// split is used on every row, so the index stays consistent.
+		const colIndex = (editor.getLine(cursor.line).slice(0, cursor.ch).match(/\|/g) || [])
+			.length;
+
+		const sourceCells = editor.getLine(cursor.line).split("|");
+		const formula = (sourceCells[colIndex] || "").trim();
+		if (!formula.startsWith("=")) {
+			new Notice("CalcCraft: the selected cell does not contain a formula");
+			return;
+		}
+
+		// Data rows are consecutive grid rows, so the row delta equals the line
+		// distance from the source cell.
+		let filled = 0;
+		for (let line = cursor.line + 1; line <= end; line++) {
+			const cells = editor.getLine(line).split("|");
+			if (colIndex >= cells.length) continue;
+			cells[colIndex] = ` ${shiftFormula(formula, line - cursor.line, 0)} `;
+			editor.setLine(line, cells.join("|"));
+			filled++;
+		}
+
+		new Notice(`CalcCraft: filled formula into ${filled} cell(s)`);
 	}
 
 	// Hide whole columns requested via a =hide(...) directive in the table.
