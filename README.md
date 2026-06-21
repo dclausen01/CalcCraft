@@ -27,6 +27,13 @@ Excel-style absolute anchors are accepted on any reference: `$a$1`, `$a1`,
 when evaluating; it marks which part stays fixed when a formula is filled down
 (see fill-down).
 
+> **Obsidian caveat:** `$...$` is also Obsidian's inline-math syntax. Single
+> anchored cells are safe (e.g. `$b$2`, because a `$` before a digit is not math),
+> but an anchored *bounded matrix* like `[$j$2:$k$6]` makes Obsidian render part
+> of it as math and corrupts the formula. For a fixed lookup table, prefer a
+> **column range** `[j:k]` (or row range) — it has no `$`, and column ranges
+> already stay fixed when filling down.
+
 Besides this `a1` reference style, the cells can be referenced using colum-row notation: `[0-9]+c[0-9]r`, where `c` stands for column and `r` stands for row. So for addressing the `b3` cell we could also write `2c3r` (column 2, row 3).
 The column-row notation supports also relative referencing by adding a `+` or `-` before the number. 
 Combinations of the two are possible:

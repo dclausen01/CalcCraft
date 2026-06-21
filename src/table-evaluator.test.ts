@@ -452,4 +452,18 @@ describe("Excel-style functions", () => {
     ];
     expect(run(grid).values[3][1]).toBe("B");
   });
+
+  it("VLOOKUP over a whole-column range ignores trailing blank rows", () => {
+    // Scale in j2:k4; the lookup uses the full columns [j:k]. Trailing blank
+    // rows read as 0 and must not overwrite the match for a high lookup.
+    const grid = [
+      ["score", "note", "", "", "", "", "", "", "", "pkt", "grade"],
+      ["=VLOOKUP(15,[j:k],2,true)", "", "", "", "", "", "", "", "", "0", "6"],
+      ["", "", "", "", "", "", "", "", "", "8", "4"],
+      ["", "", "", "", "", "", "", "", "", "15", "1"],
+      ["", "", "", "", "", "", "", "", "", "", ""],
+    ];
+    // largest key <= 15 is 15 -> grade 1, despite the trailing empty row
+    expect(run(grid).values[1][0]).toBe(1);
+  });
 });
