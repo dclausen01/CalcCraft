@@ -235,7 +235,8 @@ tr td:first-child[data-row-number]::after {
 }
 
 /* Columns hidden via a =hide(...) directive */
-.calc-hidden-col {
-    display: none;
+td.calc-hidden-col,
+th.calc-hidden-col {
+    display: none !important;
 }
  

@@ -31,6 +31,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   identifiers and overly long formulas, wired into the actual evaluation path.
 
 ### Fixed
+- **Multiplication asterisks no longer eaten by markdown**: a formula such as
+  `=round(c2*40%+f2*60%,1)` (two `*`) was rendered as italic by Obsidian, which
+  stripped the asterisks and produced an "Undefined function" error. Cell text is
+  now reconstructed from the rendered DOM, turning `<em>`/`<strong>` back into
+  `*`/`**`, so multiplication works regardless of how many `*` a formula has.
+- **Hidden columns**: the `.calc-hidden-col` rule now uses `!important` and a
+  `td/th` selector so themes cannot override it (make sure to copy the updated
+  `styles.css` into your vault).
 - **Locale parsing**: the grouping (thousands) separator is now actually
   stripped when parsing input. A double-escaped regex previously left it in
   place, so e.g. `1.234` (grouping `.`) parsed as `1.234` instead of `1234`.
