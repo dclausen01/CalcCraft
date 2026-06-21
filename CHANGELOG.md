@@ -5,6 +5,27 @@ All notable changes to CalcCraft will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Test harness**: Vitest with characterization tests for the formula engine
+  (`npm test`). Establishes a safety net before further feature work.
+- Minimal formula safety guard (`assertSafeFormula`) that rejects forbidden
+  identifiers and overly long formulas, wired into the actual evaluation path.
+
+### Fixed
+- **Locale parsing**: the grouping (thousands) separator is now actually
+  stripped when parsing input. A double-escaped regex previously left it in
+  place, so e.g. `1.234` (grouping `.`) parsed as `1.234` instead of `1234`.
+
+### Changed
+- Removed dead, never-called sanitizer methods (one of which was actively wrong)
+  in favour of the single guard above.
+- Per-cell evaluation errors are no longer dumped to the console; they remain
+  recorded in the per-cell error map as before.
+- Internal: typed the evaluator's settings (`EvaluatorSettings`) and removed a
+  stray debug `console.log` from label rendering.
+
 ## [2.2.9] - 2026-02-16
 
 ### Added

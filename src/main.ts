@@ -370,7 +370,6 @@ export default class CalcCraftPlugin extends Plugin {
                 if (!cell.dataset.colLabeled) {
                     cell.dataset.colLabeled = 'true';
                     cell.dataset.colLetter = String.fromCharCode(97 + colIndex); // 'a' + index
-                    console.log(`Set column label '${cell.dataset.colLetter}' on cell:`, cell); // DEBUG
                 }
             });
         }
