@@ -262,3 +262,70 @@ describe("percent literals", () => {
     expect(run([["=mod(10,3)"]]).values[0][0]).toBe(1);
   });
 });
+
+describe("Excel-style functions", () => {
+  it("IF returns the matching branch", () => {
+    expect(run([["=IF(5>3, 10, 20)"]]).values[0][0]).toBe(10);
+    expect(run([["=IF(2>3, 10, 20)"]]).values[0][0]).toBe(20);
+  });
+
+  it("IF does not evaluate the untaken branch (lazy)", () => {
+    // The false branch would throw (VLOOKUP not found); IF must not run it.
+    const { values, errors } = run([
+      ["1", "A", "=IF(1>0, 99, VLOOKUP(7,[a1:b1],2,false))"],
+    ]);
+    expect(values[0][2]).toBe(99);
+    expect(errors[0][2]).toBeNull();
+  });
+
+  it("IFERROR returns the value when there is no error", () => {
+    expect(run([["=IFERROR(10, 5)"]]).values[0][0]).toBe(10);
+  });
+
+  it("IFERROR catches NaN and thrown errors", () => {
+    expect(run([["=IFERROR(0/0, 5)"]]).values[0][0]).toBe(5);
+    // VLOOKUP miss throws "N/A" inside mathjs; IFERROR returns the fallback.
+    // (Lookup table must not overlap the formula cell, or it self-references.)
+    const grid = [["1", "A"], ["2", "B"], ["=IFERROR(VLOOKUP(9,[a1:b2],2,false), 0)", ""]];
+    expect(run(grid).values[2][0]).toBe(0);
+  });
+
+  it("AND / OR / NOT evaluate logically", () => {
+    expect(run([["=AND(1>0, 2>1)"]]).values[0][0]).toBe(true);
+    expect(run([["=AND(1>0, 2<1)"]]).values[0][0]).toBe(false);
+    expect(run([["=OR(1<0, 2>1)"]]).values[0][0]).toBe(true);
+    expect(run([["=NOT(1>2)"]]).values[0][0]).toBe(true);
+  });
+
+  it("AVERAGE averages numbers, ignoring blanks", () => {
+    expect(run([["=AVERAGE(2,4,6)"]]).values[0][0]).toBe(4);
+    expect(run([["2", "4", "6", "=AVERAGE(a1:c1)"]]).values[0][3]).toBe(4);
+    // empty cell is ignored (consistent with sum())
+    expect(run([["2", "", "4", "=AVERAGE(a1:c1)"]]).values[0][3]).toBe(3);
+  });
+
+  it("ROUND rounds to the given number of decimals", () => {
+    expect(run([["=ROUND(3.14159, 2)"]]).values[0][0]).toBe(3.14);
+    expect(run([["=ROUND(2.7, 0)"]]).values[0][0]).toBe(3);
+  });
+
+  it("VLOOKUP approximate match finds the largest key <= lookup", () => {
+    const grid = [
+      ["0.7", "A"],
+      ["1", "B"],
+      ["1.3", "C"],
+      ["", "=VLOOKUP(1.2,[a1:b3],2,true)"],
+    ];
+    expect(run(grid).values[3][1]).toBe("B");
+  });
+
+  it("VLOOKUP exact match returns the row value", () => {
+    const grid = [
+      ["0.7", "A"],
+      ["1", "B"],
+      ["1.3", "C"],
+      ["", "=VLOOKUP(1,[a1:b3],2,false)"],
+    ];
+    expect(run(grid).values[3][1]).toBe("B");
+  });
+});

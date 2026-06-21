@@ -41,6 +41,28 @@ Formulas are evaluated using [mathjs](https://mathjs.org/docs/reference/function
 - **Unit arithmetic**: `=5 kg + 3000 g` automatically converts and returns `8 kg`
 - **Unit conversion**: `=5 inch to cm` converts between unit systems
 - **Matrix operations with units**: Full support for unit calculations in ranges and matrices
+### Excel-style functions
+In addition to the [mathjs](https://mathjs.org/docs/reference/functions.html)
+functions, CalcCraft provides familiar spreadsheet functions:
+
+| Function | Meaning |
+| --- | --- |
+| `IF(cond, then, else)` | Returns `then` if `cond` is truthy, otherwise `else`. Branches are evaluated lazily. |
+| `IFERROR(value, fallback)` | Returns `value`, or `fallback` if evaluating `value` errors (or is `NaN`). |
+| `AND(a, b, ...)` / `OR(...)` / `NOT(x)` | Logical combinators over any number of arguments. |
+| `AVERAGE(range or values)` | Mean of the numbers, ignoring blank cells (consistent with `sum()`). |
+| `VLOOKUP(key, [a1:b9], col, approx)` | Looks `key` up in the first column of a matrix and returns column `col` (1-based). `approx=true` (default) does a sorted nearest-not-exceeding match; `approx=false` requires an exact match and errors otherwise. |
+| `ROUND(x, n)` | Rounds `x` to `n` decimals. |
+
+Cell references keep CalcCraft's lowercase `a1` notation, and lookup tables use
+the matrix form `[a2:b17]`. Example grade lookup:
+
+| grade | scale | result                          |
+| ----- | ----- | ------------------------------- |
+| 0.7   | A     | =VLOOKUP(1.2, [a2:b4], 2, true) |
+| 1     | B     |                                 |
+| 1.3   | C     |                                 |
+
 ### Percent literals
 Excel-style percentages are supported both as plain values and inside formulas:
 - **Value cell**: `60%` is stored as `0.6` (locale-aware, e.g. `12,5%` -> `0.125`)

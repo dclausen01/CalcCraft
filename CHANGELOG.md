@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Excel-style functions**: `IF`, `IFERROR`, `AND`, `OR`, `NOT`, `VLOOKUP`,
+  `AVERAGE` and `ROUND`. `IF`/`IFERROR` evaluate their branches lazily, so
+  `IFERROR` can catch errors (and NaN) from the protected expression. Cell
+  references stay in CalcCraft's lowercase `a1` notation.
 - **Percent literals**: write `60%` in a cell (parsed as `0.6`) or inside a
   formula (`=a1*60%` -> `a1*(60/100)`). Locale-aware (`12,5%` -> `0.125`).
 - **Test harness**: Vitest with characterization tests for the formula engine

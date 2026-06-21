@@ -68,6 +68,118 @@ math.import({
     }
 }, { override: true });
 
+// --- Excel-style helper functions -------------------------------------------
+// These give spreadsheet users familiar names (IF, VLOOKUP, ...). Cell
+// references still use CalcCraft's lowercase a1 notation; only the function
+// names mirror Excel. Names that already exist in mathjs (round, and, or, not,
+// mean) are left untouched - we add the uppercase Excel variants alongside.
+
+function isTruthy(v: any): boolean {
+    if (v === null || v === undefined) return false;
+    if (typeof v === "boolean") return v;
+    if (typeof v === "number") return v !== 0 && !Number.isNaN(v);
+    if (typeof v === "string") return v.length > 0;
+    return true;
+}
+
+function toPlainArray(value: any): any {
+    if (value && typeof value.toArray === "function") return value.toArray();
+    return value;
+}
+
+function flattenValues(args: any[]): any[] {
+    const out: any[] = [];
+    for (const raw of args) {
+        const a = toPlainArray(raw);
+        if (Array.isArray(a)) out.push(...flattenValues(a));
+        else out.push(a);
+    }
+    return out;
+}
+
+function toMatrix2D(value: any): any[][] {
+    const arr = toPlainArray(value);
+    if (!Array.isArray(arr)) return [[arr]];
+    if (arr.length === 0) return [];
+    if (!Array.isArray(arr[0])) return arr.map((v: any) => [v]); // column vector
+    return arr;
+}
+
+// IF and IFERROR use rawArgs so branches are evaluated lazily (Excel semantics).
+function ifFn(args: any[], _math: any, scope: any): any {
+    const cond = args[0].compile().evaluate(scope);
+    if (isTruthy(cond)) {
+        return args.length > 1 ? args[1].compile().evaluate(scope) : true;
+    }
+    return args.length > 2 ? args[2].compile().evaluate(scope) : false;
+}
+(ifFn as any).rawArgs = true;
+
+function iferrorFn(args: any[], _math: any, scope: any): any {
+    try {
+        const value = args[0].compile().evaluate(scope);
+        // Treat NaN as an error, like Excel's error values.
+        if (typeof value === "number" && Number.isNaN(value)) throw new Error("NaN");
+        return value;
+    } catch (e) {
+        return args.length > 1 ? args[1].compile().evaluate(scope) : "";
+    }
+}
+(iferrorFn as any).rawArgs = true;
+
+function averageFn(...args: any[]): number {
+    // Consistent with this plugin's sum(): blanks (which become 0) are ignored.
+    const nums = flattenValues(args).filter(
+        (v: any) => typeof v === "number" && isFinite(v) && v !== 0
+    );
+    if (nums.length === 0) return 0;
+    return nums.reduce((s: number, v: number) => s + v, 0) / nums.length;
+}
+
+function vlookupFn(lookup: any, table: any, colIndex: any, approx: any = true): any {
+    const rows = toMatrix2D(table);
+    const idx = (typeof colIndex === "number" ? colIndex : parseInt(colIndex, 10)) - 1;
+    const exact = approx === false || approx === 0;
+
+    if (exact) {
+        for (const row of rows) {
+            if (row[0] === lookup) return row[idx];
+        }
+        throw new Error("N/A");
+    }
+
+    // Approximate match: assumes the first column is sorted ascending and
+    // returns the row with the largest key that is still <= lookup.
+    let match: any[] | null = null;
+    for (const row of rows) {
+        const key = row[0];
+        if (typeof key === "number" && typeof lookup === "number") {
+            if (key <= lookup) match = row;
+            else break;
+        }
+    }
+    if (match === null) throw new Error("N/A");
+    return match[idx];
+}
+
+math.import(
+    {
+        IF: ifFn,
+        if: ifFn,
+        IFERROR: iferrorFn,
+        iferror: iferrorFn,
+        AND: (...args: any[]) => flattenValues(args).every(isTruthy),
+        OR: (...args: any[]) => flattenValues(args).some(isTruthy),
+        NOT: (x: any) => !isTruthy(x),
+        AVERAGE: averageFn,
+        average: averageFn,
+        VLOOKUP: vlookupFn,
+        vlookup: vlookupFn,
+        ROUND: (x: any, n: number = 0) => math.round(x, n)
+    },
+    { override: true }
+);
+
 const evaluate = math.evaluate;
 
 enum celltype {
