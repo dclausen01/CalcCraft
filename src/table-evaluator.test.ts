@@ -70,6 +70,33 @@ describe("cell references", () => {
   });
 });
 
+describe("absolute ($) references", () => {
+  it("evaluates $a$1 like a1", () => {
+    expect(run([["5", "12", "=$a$1+$b$1"]]).values[0][2]).toBe(17);
+  });
+
+  it("accepts mixed anchors $a1 and a$1", () => {
+    expect(run([["5", "12", "=$a1+b$1"]]).values[0][2]).toBe(17);
+  });
+
+  it("supports $ in explicit ranges", () => {
+    expect(run([["5", "12"], ["7", "5"], ["=sum($a$1:$b$2)", ""]]).values[2][0]).toBe(29);
+  });
+
+  it("supports $ in matrix ranges", () => {
+    const { values } = run([
+      ["5", "12", "=[$a$1:$a$3]+[$b$1:$b$3]"],
+      ["7", "5", ""],
+      ["19", "10", ""],
+    ]);
+    expect(values.map((r) => r[2])).toEqual([17, 12, 29]);
+  });
+
+  it("supports $ in column ranges", () => {
+    expect(run([["3", "=sum($a:$a)"], ["4", ""], ["5", ""]]).values[0][1]).toBe(9);
+  });
+});
+
 describe("ranges", () => {
   it("sums an explicit rectangular range", () => {
     expect(run([["5", "12"], ["7", "5"], ["=sum(a1:b2)", ""]]).values[2][0]).toBe(29);

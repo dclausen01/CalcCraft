@@ -387,6 +387,10 @@ export class TableEvaluator {
     }
 
     ref2cords(ref: string, formulaRow = 0, formulaCol = 0): [number, number] | null {
+        // Strip Excel-style absolute-reference anchors ($a$1 -> a1). The anchors
+        // are only meaningful for fill-down (which rewrites the source text);
+        // for evaluation they resolve to the same coordinates.
+        ref = ref.replace(/\$/g, "");
         const match = ref.match(/^([a-z]+|([+-]?)\d+c)(\d+|([+-]?)\d+r)$/);
 
         if (!match) {
@@ -417,7 +421,7 @@ export class TableEvaluator {
     }
 
     letter2col(letter: string): number {
-        return letter.charCodeAt(0) - "a".charCodeAt(0);
+        return letter.replace(/\$/g, "").charCodeAt(0) - "a".charCodeAt(0);
     }
 
     number2row(nr: number): number {
@@ -806,17 +810,19 @@ try {
             } else {
                 const restformula = formula.slice(i);
                 this.debug(`rest formula is:${restformula}`);
-                const matchCell = restformula.match(/^([a-z]|[+-]?\d+c)([+-]?\d+r|\d+)/);
+                // `\$?` allows Excel-style absolute anchors ($a$1); they are
+                // stripped during resolution (see ref2cords / letter2col).
+                const matchCell = restformula.match(/^\$?([a-z]|[+-]?\d+c)\$?([+-]?\d+r|\d+)/);
 
                 //const matchOp = restformula.match(/^[+\-*/]/);
 
                 const matchRange = restformula.match(
-                    /^([a-z]|[+-]?\d+c)([+-]?\d+r|\d+):([a-z]|[+-]?\d+c)([+-]?\d+r|\d+)/
+                    /^\$?([a-z]|[+-]?\d+c)\$?([+-]?\d+r|\d+):\$?([a-z]|[+-]?\d+c)\$?([+-]?\d+r|\d+)/
                 );
 
                 const matchMatrix = restformula.match(
                     //basically matchRange but between `[` `]`
-                    /^\[([a-z]|[+-]\d+c)([+-]\d+r|\d+):([a-z]|[+-]\d+c)([+-]\d+r|\d+)\]/
+                    /^\[\$?([a-z]|[+-]\d+c)\$?([+-]\d+r|\d+):\$?([a-z]|[+-]\d+c)\$?([+-]\d+r|\d+)\]/
                 );
 
                 const matchformula = restformula.match(/^[a-zA-Z]{3,}\(/);
@@ -826,9 +832,9 @@ try {
                 //const matchRange=restformula.match(/^[a-z]\d+:[a-z]\d+/); //normal range
                 //const matchRange = restformula.match(/^[a-z](?:\+|-)?\d+:[a-z](?:\+|-)?\d+/);
 
-                const matchRangeCol = restformula.match(/^[a-z]:[a-z]/); //column range
-                const matchRangeColMatrix = restformula.match(/^\[[a-z]:[a-z]\]/); //column range
-                const matchRangeRow = restformula.match(/^\d+:\d+/); //row range
+                const matchRangeCol = restformula.match(/^\$?[a-z]:\$?[a-z]/); //column range
+                const matchRangeColMatrix = restformula.match(/^\[\$?[a-z]:\$?[a-z]\]/); //column range
+                const matchRangeRow = restformula.match(/^\$?\d+:\$?\d+/); //row range
 
                 if (matchRange) {
                     /* normal range a3:b7 or a-3:b+7, or anything in between;
@@ -871,7 +877,7 @@ try {
                 } else if (matchRangeRow) {
                     this.debug(`we matched a row range`);
                     i += matchRangeRow[0].length - 1;
-                    const [start, end] = matchRangeRow[0].split(":"); // Split the range into start and end
+                    const [start, end] = matchRangeRow[0].replace(/\$/g, "").split(":"); // Split the range into start and end (anchors stripped)
                     const startCol = 0;
                     const endCol = this.maxcols - 1;
                     const startRow = this.number2row(parseInt(start));

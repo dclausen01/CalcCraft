@@ -21,6 +21,12 @@ most of the functions from [mathjs](https://mathjs.org/docs/reference/functions.
 #### Spreadsheet like references
 If the result is a vector or a matrix the output will be expanded to multiple cells, and the references for those cells are recomputed.
 The references supported are in `[a-z][0-9]+` format (lowercase)
+
+Excel-style absolute anchors are accepted on any reference: `$a$1`, `$a1`,
+`a$1`, and in ranges/matrices (`$a$2:$b$17`, `[$a$2:$b$17]`). The `$` is ignored
+when evaluating; it marks which part stays fixed when a formula is filled down
+(see fill-down).
+
 Besides this `a1` reference style, the cells can be referenced using colum-row notation: `[0-9]+c[0-9]r`, where `c` stands for column and `r` stands for row. So for addressing the `b3` cell we could also write `2c3r` (column 2, row 3).
 The column-row notation supports also relative referencing by adding a `+` or `-` before the number. 
 Combinations of the two are possible:

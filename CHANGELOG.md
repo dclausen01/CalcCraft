@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Absolute reference anchors**: `$a$1`, `$a1`, `a$1` and `$` in ranges/matrices
+  (`$a$2:$b$17`, `[$a$2:$b$17]`) are now parsed and evaluated. The anchor is
+  ignored during evaluation and will drive fill-down behaviour.
 - **Excel-style functions**: `IF`, `IFERROR`, `AND`, `OR`, `NOT`, `VLOOKUP`,
   `AVERAGE` and `ROUND`. `IF`/`IFERROR` evaluate their branches lazily, so
   `IFERROR` can catch errors (and NaN) from the protected expression. Cell
