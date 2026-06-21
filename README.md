@@ -41,6 +41,18 @@ Formulas are evaluated using [mathjs](https://mathjs.org/docs/reference/function
 - **Unit arithmetic**: `=5 kg + 3000 g` automatically converts and returns `8 kg`
 - **Unit conversion**: `=5 inch to cm` converts between unit systems
 - **Matrix operations with units**: Full support for unit calculations in ranges and matrices
+### Percent literals
+Excel-style percentages are supported both as plain values and inside formulas:
+- **Value cell**: `60%` is stored as `0.6` (locale-aware, e.g. `12,5%` -> `0.125`)
+- **In a formula**: `=a1*60%` is evaluated as `a1*(60/100)`
+
+| price | discount | final               |
+| ----- | -------- | ------------------- |
+| 200   | 60%      | =a1*(1-b1)          |
+
+Only a number directly followed by `%` is converted, so `mod(10, 3)` and other
+expressions are unaffected.
+
 ### Matrix and Range Operations
 Ranges between `[...]` are expanded as matrices and can be used for matrix operations:
 - **Standard ranges**: `a1:c3` flattens to a 1D array for functions like `sum()`

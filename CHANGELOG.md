@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Percent literals**: write `60%` in a cell (parsed as `0.6`) or inside a
+  formula (`=a1*60%` -> `a1*(60/100)`). Locale-aware (`12,5%` -> `0.125`).
 - **Test harness**: Vitest with characterization tests for the formula engine
   (`npm test`). Establishes a safety net before further feature work.
 - Minimal formula safety guard (`assertSafeFormula`) that rejects forbidden

@@ -229,3 +229,36 @@ describe("functions", () => {
     expect(values.map((r) => r[1])).toEqual([0, 1, null]);
   });
 });
+
+describe("percent literals", () => {
+  it("parses a percent value cell as its decimal fraction", () => {
+    expect(run([["60%"]]).values[0][0]).toBe(0.6);
+    expect(run([["100%"]]).values[0][0]).toBe(1);
+  });
+
+  it("evaluates a percent literal inside a formula", () => {
+    expect(run([["=50%"]]).values[0][0]).toBe(0.5);
+    expect(run([["=100%"]]).values[0][0]).toBe(1);
+  });
+
+  it("multiplies a value by a percent literal in a formula", () => {
+    expect(run([["200", "=a1*60%"]]).values[0][1]).toBe(120);
+  });
+
+  it("uses a percent value cell from a formula reference", () => {
+    expect(run([["60%", "=a1*100"]]).values[0][1]).toBe(60);
+  });
+
+  it("supports decimals in percent literals (formula and locale value)", () => {
+    expect(run([["=12.5%"]]).values[0][0]).toBe(0.125);
+    const v = run([["12,5%"]], {
+      decimalSeparator: ",",
+      groupingSeparator: ".",
+    }).values[0][0];
+    expect(v).toBe(0.125);
+  });
+
+  it("does not break the mod() function", () => {
+    expect(run([["=mod(10,3)"]]).values[0][0]).toBe(1);
+  });
+});

@@ -218,10 +218,17 @@ export class TableEvaluator {
                     this.celltype[rowIndex][colIndex] = celltype.number;
                     this.tableData[rowIndex][colIndex] = null;
                 } else {
-                    // Value cell - could be number, unit, or text
+                    // Value cell - could be number, unit, percent, or text
                     this.formulaData[rowIndex][colIndex] = null;
                     this.cellstatus[rowIndex][colIndex] = cellstatus.iscomputed;
                     this.celltype[rowIndex][colIndex] = celltype.number;
+
+                    // Percent literal (e.g. "60%" -> 0.6) takes precedence
+                    const percent = this.parsePercentLiteral(cellContent);
+                    if (percent !== null) {
+                        this.tableData[rowIndex][colIndex] = percent;
+                        continue;
+                    }
 
                     // Parse for units
                     const parsed = this.parseUnitValue(cellContent);
@@ -318,6 +325,28 @@ export class TableEvaluator {
     }
 
 
+    /**
+     * Excel-style percent literal in a value cell, e.g. "60%" -> 0.6 or
+     * "12,5%" (locale) -> 0.125. Returns null if the cell is not a percent.
+     */
+    private parsePercentLiteral(cellContent: string): number | null {
+        const match = String(cellContent).trim().match(/^(-?[\d.,\s]+)%$/);
+        if (!match) return null;
+        const value = this.parseLocaleNumber(match[1]);
+        if (isNaN(value) || !isFinite(value)) return null;
+        return value / 100;
+    }
+
+    /**
+     * Rewrite Excel-style percent literals inside a formula so mathjs sees a
+     * plain fraction: e.g. "a1*60%" -> "a1*(60/100)". Only a number immediately
+     * followed by "%" is converted; "x % y" (modulo, with spaces) is untouched.
+     */
+    private convertPercentLiterals(formula: string): string {
+        return formula.replace(/(\d+(?:\.\d+)?)%/g, "($1/100)");
+    }
+
+
     private parseUnitValue(cellContent: string): { value: number; unit: string | null } {
       if (typeof cellContent !== 'string') {
         return { value: this.parseLocaleNumber(cellContent), unit: null };
@@ -396,7 +425,7 @@ export class TableEvaluator {
             }
 
             this.cellstatus[row][col] = cellstatus.computing;
-            const formula = this.formulaData[row][col].slice(1);
+            const formula = this.convertPercentLiterals(this.formulaData[row][col].slice(1));
 
             if (debug) {
                 this.debug(`we are asked to fill in at ${row},${col} with formula: ${formula}`);
