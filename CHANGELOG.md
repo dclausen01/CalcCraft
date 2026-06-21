@@ -31,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   identifiers and overly long formulas, wired into the actual evaluation path.
 
 ### Fixed
+- **`$` anchors no longer broken by Obsidian's math rendering**: Obsidian parses
+  `$...$` as LaTeX inline math, so `[$j$2:$k$6]` (and `=a2*$b$2`) was rendered as
+  math spans and read back corrupted, e.g. VLOOKUP returning `undefined`. Cell
+  extraction now detects math spans and rebuilds the original `$...$` text, so
+  absolute references work in rendered tables.
 - **Multiplication asterisks no longer eaten by markdown**: a formula such as
   `=round(c2*40%+f2*60%,1)` (two `*`) was rendered as italic by Obsidian, which
   stripped the asterisks and produced an "Undefined function" error. Cell text is
