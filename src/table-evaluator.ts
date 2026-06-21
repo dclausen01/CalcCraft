@@ -249,6 +249,97 @@ export interface EvaluatorSettings {
     groupingSeparator?: string;
 }
 
+/**
+ * Adjust the references in a formula as if it were copied (filled) by `dRow`
+ * rows and `dCol` columns, Excel-style.
+ *
+ * Rules:
+ * - Only `a1`-style references (letter column + number row) and pure column
+ *   (`a:a`) / row (`1:1`) ranges are shifted.
+ * - `$` anchors freeze the part they precede ($a$1 fully, $a1 column, a$1 row).
+ * - The `c`/`r` column-row notation (`+0c-1r`, `2c3r`, `a+1r`) is left as-is;
+ *   it is already explicit/relative and adjusts on its own.
+ * - Shifts are clamped at the table edge (row >= 1, column >= a).
+ *
+ * Pure and DOM-free so it can be unit-tested in isolation.
+ */
+export function shiftFormula(formula: string, dRow: number, dCol: number): string {
+    let prefix = "";
+    if (formula.startsWith("=")) {
+        prefix = "=";
+        formula = formula.slice(1);
+    }
+
+    const shiftLetter = (letter: string, anchored: boolean): string => {
+        if (anchored) return letter;
+        const idx = letter.charCodeAt(0) - 97 + dCol;
+        const clamped = Math.max(0, Math.min(25, idx));
+        return String.fromCharCode(97 + clamped);
+    };
+    const shiftNum = (num: string, anchored: boolean): string => {
+        if (anchored) return num;
+        return String(Math.max(1, parseInt(num, 10) + dRow));
+    };
+
+    let out = "";
+    let i = 0;
+    while (i < formula.length) {
+        const rest = formula.slice(i);
+        let m: RegExpMatchArray | null;
+
+        // 1. function name (e.g. "ROUND(") - copy verbatim
+        if ((m = rest.match(/^[a-zA-Z]{3,}\(/))) {
+            out += m[0];
+            i += m[0].length;
+            continue;
+        }
+        // 2. column-row notation (2c3r, +0c-1r, 2c7) - leave untouched
+        if ((m = rest.match(/^[+-]?\d+c([+-]?\d+r|\d+)/))) {
+            out += m[0];
+            i += m[0].length;
+            continue;
+        }
+        // 3. letter + relative-row notation (a+1r, a-3r, a1r) - leave untouched
+        if ((m = rest.match(/^\$?[a-z][+-]?\d+r/))) {
+            out += m[0];
+            i += m[0].length;
+            continue;
+        }
+        // 4. a1-style cell: shift letter and/or row honouring $ anchors
+        if ((m = rest.match(/^(\$?)([a-z])(\$?)(\d+)/))) {
+            const [, colA, letter, rowA, digits] = m;
+            out += colA + shiftLetter(letter, colA === "$") + rowA + shiftNum(digits, rowA === "$");
+            i += m[0].length;
+            continue;
+        }
+        // 5. column range (a:a) - shift letters by column delta
+        if ((m = rest.match(/^(\$?)([a-z]):(\$?)([a-z])/))) {
+            const [, a1, l1, a2, l2] = m;
+            out += a1 + shiftLetter(l1, a1 === "$") + ":" + a2 + shiftLetter(l2, a2 === "$");
+            i += m[0].length;
+            continue;
+        }
+        // 6. row range (1:1) - shift numbers by row delta
+        if ((m = rest.match(/^(\$?)(\d+):(\$?)(\d+)/))) {
+            const [, a1, n1, a2, n2] = m;
+            out += a1 + shiftNum(n1, a1 === "$") + ":" + a2 + shiftNum(n2, a2 === "$");
+            i += m[0].length;
+            continue;
+        }
+        // 7. plain number run - copy verbatim
+        if ((m = rest.match(/^\d+/))) {
+            out += m[0];
+            i += m[0].length;
+            continue;
+        }
+        // default: copy a single character
+        out += formula[i];
+        i += 1;
+    }
+
+    return prefix + out;
+}
+
 export class TableEvaluator {
     tableData: any[][] = [];
     formulaData: any[][] = [];

@@ -11,7 +11,7 @@
  * main.ts, NOT here, so the evaluator returns raw numbers.
  */
 import { describe, it, expect } from "vitest";
-import { TableEvaluator, parseColumnSpec } from "./table-evaluator";
+import { TableEvaluator, parseColumnSpec, shiftFormula } from "./table-evaluator";
 
 // cellType enum is not exported; mirror the numeric values used internally.
 const TYPE = { number: 1, formula: 2, matrix: 3, escaped_text: 4 } as const;
@@ -134,6 +134,63 @@ describe("hide() column directive", () => {
 
   it("reports no hidden columns when there is no directive", () => {
     expect(run([["1", "2"]]).hiddenColumns).toEqual([]);
+  });
+});
+
+describe("shiftFormula (fill-down/right reference adjustment)", () => {
+  it("shifts a1-style references down and right", () => {
+    expect(shiftFormula("a1+b1", 1, 0)).toBe("a2+b2");
+    expect(shiftFormula("a1+b1", 0, 1)).toBe("b1+c1");
+    expect(shiftFormula("a1+b1", 2, 1)).toBe("b3+c3");
+  });
+
+  it("preserves a leading '='", () => {
+    expect(shiftFormula("=a1+b1", 1, 0)).toBe("=a2+b2");
+  });
+
+  it("honours $ anchors on each part independently", () => {
+    expect(shiftFormula("$a$1+b1", 1, 0)).toBe("$a$1+b2");
+    expect(shiftFormula("$a1", 1, 1)).toBe("$a2"); // column fixed, row moves
+    expect(shiftFormula("a$1", 1, 1)).toBe("b$1"); // row fixed, column moves
+    expect(shiftFormula("$a$1", 3, 3)).toBe("$a$1"); // fully fixed
+  });
+
+  it("shifts both endpoints of an a1-style range", () => {
+    expect(shiftFormula("sum(a1:a3)", 1, 0)).toBe("sum(a2:a4)");
+    expect(shiftFormula("sum($a$1:$a$3)", 1, 0)).toBe("sum($a$1:$a$3)");
+  });
+
+  it("shifts column ranges by column delta only", () => {
+    expect(shiftFormula("sum(a:a)", 0, 1)).toBe("sum(b:b)");
+    expect(shiftFormula("sum(a:c)", 0, 1)).toBe("sum(b:d)");
+    expect(shiftFormula("sum($a:$a)", 0, 1)).toBe("sum($a:$a)");
+  });
+
+  it("shifts row ranges by row delta only", () => {
+    expect(shiftFormula("sum(1:1)", 1, 0)).toBe("sum(2:2)");
+    expect(shiftFormula("sum($1:$1)", 1, 0)).toBe("sum($1:$1)");
+  });
+
+  it("leaves c/r notation untouched (already explicit/relative)", () => {
+    expect(shiftFormula("+0c-1r", 1, 0)).toBe("+0c-1r");
+    expect(shiftFormula("2c3r", 1, 0)).toBe("2c3r");
+    expect(shiftFormula("a+1r", 1, 0)).toBe("a+1r");
+  });
+
+  it("preserves function names and numbers", () => {
+    expect(shiftFormula("ROUND(a1,2)", 1, 0)).toBe("ROUND(a2,2)");
+    expect(shiftFormula("a1*60", 1, 0)).toBe("a2*60");
+  });
+
+  it("keeps an anchored lookup table fixed while shifting the key", () => {
+    expect(shiftFormula("VLOOKUP(i2,[$a$2:$b$17],2,true)", 1, 0)).toBe(
+      "VLOOKUP(i3,[$a$2:$b$17],2,true)"
+    );
+  });
+
+  it("clamps below the table edges instead of going negative", () => {
+    expect(shiftFormula("a1", -5, 0)).toBe("a1"); // row can't go below 1
+    expect(shiftFormula("a1", 0, -3)).toBe("a1"); // column can't go below a
   });
 });
 
