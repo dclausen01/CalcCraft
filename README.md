@@ -81,6 +81,19 @@ Excel-style percentages are supported both as plain values and inside formulas:
 Only a number directly followed by `%` is converted, so `mod(10, 3)` and other
 expressions are unaffected.
 
+### Hiding columns
+Helper columns (intermediate calculations) can be hidden from the rendered table
+with a `=hide(...)` directive placed in any free cell. List the columns by their
+letter, with ranges allowed:
+
+| a   | b   | helper1 | helper2 | result    |             |
+| --- | --- | ------- | ------- | --------- | ----------- |
+| 1   | 2   | =a2*2   | =b2*2   | =c2+d2    | =hide(c:d)  |
+
+Columns `c` and `d` are hidden in reading and live-preview mode, while the
+formulas keep working. The directive cell itself renders empty. The underlying
+markdown is unchanged, so switch to source mode to see or edit hidden columns.
+
 ### Matrix and Range Operations
 Ranges between `[...]` are expanded as matrices and can be used for matrix operations:
 - **Standard ranges**: `a1:c3` flattens to a 1D array for functions like `sum()`

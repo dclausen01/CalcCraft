@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Hide columns**: a `=hide(c, d, e)` directive (ranges like `c:e` allowed) in
+  any cell hides those columns in reading/live-preview mode while keeping the
+  formulas working. The directive cell renders empty; the markdown is unchanged.
 - **Absolute reference anchors**: `$a$1`, `$a1`, `a$1` and `$` in ranges/matrices
   (`$a$2:$b$17`, `[$a$2:$b$17]`) are now parsed and evaluated. The anchor is
   ignored during evaluation and will drive fill-down behaviour.

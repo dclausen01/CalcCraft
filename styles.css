@@ -233,4 +233,9 @@ tr td:first-child[data-row-number]::after {
 .cm-table-widget .escaped-text-cell .table-cell-wrapper.calc-overlay-cell:not(:focus-within)::after {
     color: var(--text-normal); /* Normal text color, not formula color */
 }
+
+/* Columns hidden via a =hide(...) directive */
+.calc-hidden-col {
+    display: none;
+}
  

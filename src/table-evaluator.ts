@@ -186,7 +186,37 @@ enum celltype {
     number = 1,
     formula,
     matrix,
-    escaped_text
+    escaped_text,
+    directive
+}
+
+/**
+ * Parse the column list of a `=hide(...)` directive into zero-based column
+ * indices. Accepts single letters and letter ranges, e.g. "s,t,u" or "c:e".
+ * Case-insensitive; unknown tokens are ignored. Pure and DOM-free for testing.
+ */
+export function parseColumnSpec(spec: string): number[] {
+    const toIdx = (s: string) => s.trim().toLowerCase().charCodeAt(0) - 97;
+    const cols: number[] = [];
+    const add = (c: number) => {
+        if (c >= 0 && c < 26 && !cols.includes(c)) cols.push(c);
+    };
+
+    for (const part of spec.split(",")) {
+        const token = part.trim();
+        if (!token) continue;
+        const range = token.match(/^([a-z]):([a-z])$/i);
+        if (range) {
+            let a = toIdx(range[1]);
+            let b = toIdx(range[2]);
+            if (a > b) [a, b] = [b, a];
+            for (let c = a; c <= b; c++) add(c);
+        } else if (/^[a-z]$/i.test(token)) {
+            add(toIdx(token));
+        }
+        // anything else (numbers, symbols) is ignored
+    }
+    return cols.sort((x, y) => x - y);
 }
 enum cellstatus {
     none = 1,
@@ -206,6 +236,7 @@ export interface TableResult {
     values: any[][];
     errors: (string | null)[][];
     cellTypes: celltype[][];
+    hiddenColumns: number[];
 }
 
 /**
@@ -228,6 +259,7 @@ export class TableEvaluator {
     children: [number, number][][][] = [];
     maxcols: number = 0;
     maxrows: number = 0;
+    hiddenColumns: number[] = [];
     useBool = false;
     settings: EvaluatorSettings = {};
 
@@ -266,6 +298,7 @@ export class TableEvaluator {
         this.children = [];
         this.maxcols = 0;
         this.maxrows = 0;
+        this.hiddenColumns = [];
 
         // Initialize arrays
         this.initializeArrays(gridData);
@@ -279,7 +312,8 @@ export class TableEvaluator {
         return {
             values: this.tableData,
             errors: this.errors,
-            cellTypes: this.celltype
+            cellTypes: this.celltype,
+            hiddenColumns: this.hiddenColumns
         };
     }
 
@@ -311,7 +345,20 @@ export class TableEvaluator {
             for (let colIndex = 0; colIndex < this.maxcols; colIndex++) {
                 const cellContent = gridData[rowIndex]?.[colIndex] || "";
 
-                if (cellContent.startsWith("'=")) {
+                const hideMatch = cellContent.match(/^=hide\((.*)\)$/i);
+
+                if (hideMatch) {
+                    // Column-visibility directive: collect the columns to hide
+                    // and render this cell empty. Not a computable formula.
+                    this.formulaData[rowIndex][colIndex] = null;
+                    this.cellstatus[rowIndex][colIndex] = cellstatus.iscomputed;
+                    this.celltype[rowIndex][colIndex] = celltype.directive;
+                    this.tableData[rowIndex][colIndex] = "";
+                    for (const c of parseColumnSpec(hideMatch[1])) {
+                        if (!this.hiddenColumns.includes(c)) this.hiddenColumns.push(c);
+                    }
+                    this.hiddenColumns.sort((x, y) => x - y);
+                } else if (cellContent.startsWith("'=")) {
                     // Store the content WITHOUT the apostrophe for display
                     this.formulaData[rowIndex][colIndex] = null;
                     this.cellstatus[rowIndex][colIndex] = cellstatus.iscomputed;

@@ -347,13 +347,36 @@ export default class CalcCraftPlugin extends Plugin {
                         // Reading view
                         cellEl.textContent = String(computedValue);
                     }
+                } else if (cellType === 5) { // directive (=hide(...)): render empty
+                    cellEl.classList.add("calc-directive-cell");
+                    cellEl.setAttribute("title", cellContent);
+                    const wrapper = cellEl.querySelector<HTMLElement>(".table-cell-wrapper");
+                    if (wrapper) {
+                        wrapper.dataset.calcDisplay = "";
+                        wrapper.classList.add("calc-overlay-cell");
+                    } else {
+                        cellEl.textContent = "";
+                    }
                 }
 
 
 			}
 		}
- 
+
+		this.applyHiddenColumns(result.hiddenColumns);
+
 		this.addTableEventListeners(tableEl);
+	}
+
+	// Hide whole columns requested via a =hide(...) directive in the table.
+	private applyHiddenColumns(hiddenColumns: number[] | undefined): void {
+		if (!hiddenColumns || hiddenColumns.length === 0) return;
+		for (const colIndex of hiddenColumns) {
+			for (let r = 0; r < this.htmlTable.length; r++) {
+				const cell = this.htmlTable[r]?.[colIndex];
+				if (cell) cell.classList.add("calc-hidden-col");
+			}
+		}
 	}
 
 

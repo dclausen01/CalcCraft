@@ -11,7 +11,7 @@
  * main.ts, NOT here, so the evaluator returns raw numbers.
  */
 import { describe, it, expect } from "vitest";
-import { TableEvaluator } from "./table-evaluator";
+import { TableEvaluator, parseColumnSpec } from "./table-evaluator";
 
 // cellType enum is not exported; mirror the numeric values used internally.
 const TYPE = { number: 1, formula: 2, matrix: 3, escaped_text: 4 } as const;
@@ -94,6 +94,46 @@ describe("absolute ($) references", () => {
 
   it("supports $ in column ranges", () => {
     expect(run([["3", "=sum($a:$a)"], ["4", ""], ["5", ""]]).values[0][1]).toBe(9);
+  });
+});
+
+describe("parseColumnSpec", () => {
+  it("parses single column letters into zero-based indices", () => {
+    expect(parseColumnSpec("a, c, e")).toEqual([0, 2, 4]);
+    expect(parseColumnSpec("s,t,u,x,y")).toEqual([18, 19, 20, 23, 24]);
+  });
+
+  it("expands letter ranges", () => {
+    expect(parseColumnSpec("c:e")).toEqual([2, 3, 4]);
+    expect(parseColumnSpec("e:c")).toEqual([2, 3, 4]); // order-independent
+  });
+
+  it("mixes singles and ranges, de-duplicates and sorts", () => {
+    expect(parseColumnSpec("b, c:e, a, d")).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it("is case-insensitive and ignores junk tokens", () => {
+    expect(parseColumnSpec("A, , C:E, 7, !!")).toEqual([0, 2, 3, 4]);
+  });
+});
+
+describe("hide() column directive", () => {
+  it("collects hidden columns and renders the directive cell empty", () => {
+    const { values, cellTypes, hiddenColumns } = run([
+      ["a", "b", "c", "d", "=hide(c,d)"],
+      ["1", "2", "3", "4", ""],
+    ]);
+    expect(hiddenColumns).toEqual([2, 3]);
+    expect(values[0][4]).toBe(""); // directive cell shows nothing
+    expect(cellTypes[0][4]).toBe(5); // directive cell type
+  });
+
+  it("supports ranges inside hide()", () => {
+    expect(run([["x", "=hide(a:c)"]]).hiddenColumns).toEqual([0, 1, 2]);
+  });
+
+  it("reports no hidden columns when there is no directive", () => {
+    expect(run([["1", "2"]]).hiddenColumns).toEqual([]);
   });
 });
 
