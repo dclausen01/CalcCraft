@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Fill down**: the *CalcCraft: Fill formula down* command (also in the editor
+  right-click menu) copies the formula in the current cell down its column to
+  the end of the table, adjusting `a1`-style references per row while keeping
+  `$`-anchored and `c`/`r` relative references intact. The result is written to
+  the markdown so the formulas persist.
+- **Hide columns**: a `=hide(c, d, e)` directive (ranges like `c:e` allowed) in
+  any cell hides those columns in reading/live-preview mode while keeping the
+  formulas working. The directive cell renders empty; the markdown is unchanged.
+- **Absolute reference anchors**: `$a$1`, `$a1`, `a$1` and `$` in ranges/matrices
+  (`$a$2:$b$17`, `[$a$2:$b$17]`) are now parsed and evaluated. The anchor is
+  ignored during evaluation and will drive fill-down behaviour.
+- **Excel-style functions**: `IF`, `IFERROR`, `AND`, `OR`, `NOT`, `VLOOKUP`,
+  `AVERAGE` and `ROUND`. `IF`/`IFERROR` evaluate their branches lazily, so
+  `IFERROR` can catch errors (and NaN) from the protected expression. Cell
+  references stay in CalcCraft's lowercase `a1` notation.
+- **Percent literals**: write `60%` in a cell (parsed as `0.6`) or inside a
+  formula (`=a1*60%` -> `a1*(60/100)`). Locale-aware (`12,5%` -> `0.125`).
 - **Test harness**: Vitest with characterization tests for the formula engine
   (`npm test`). Establishes a safety net before further feature work.
 - Minimal formula safety guard (`assertSafeFormula`) that rejects forbidden

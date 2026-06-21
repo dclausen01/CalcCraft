@@ -11,7 +11,7 @@
  * main.ts, NOT here, so the evaluator returns raw numbers.
  */
 import { describe, it, expect } from "vitest";
-import { TableEvaluator } from "./table-evaluator";
+import { TableEvaluator, parseColumnSpec, shiftFormula } from "./table-evaluator";
 
 // cellType enum is not exported; mirror the numeric values used internally.
 const TYPE = { number: 1, formula: 2, matrix: 3, escaped_text: 4 } as const;
@@ -67,6 +67,130 @@ describe("cell references", () => {
 
   it("resolves mixed letter + relative row (a+1r = column a, one row down)", () => {
     expect(run([["1", "=a+1r"], ["9", ""]]).values[0][1]).toBe(9);
+  });
+});
+
+describe("absolute ($) references", () => {
+  it("evaluates $a$1 like a1", () => {
+    expect(run([["5", "12", "=$a$1+$b$1"]]).values[0][2]).toBe(17);
+  });
+
+  it("accepts mixed anchors $a1 and a$1", () => {
+    expect(run([["5", "12", "=$a1+b$1"]]).values[0][2]).toBe(17);
+  });
+
+  it("supports $ in explicit ranges", () => {
+    expect(run([["5", "12"], ["7", "5"], ["=sum($a$1:$b$2)", ""]]).values[2][0]).toBe(29);
+  });
+
+  it("supports $ in matrix ranges", () => {
+    const { values } = run([
+      ["5", "12", "=[$a$1:$a$3]+[$b$1:$b$3]"],
+      ["7", "5", ""],
+      ["19", "10", ""],
+    ]);
+    expect(values.map((r) => r[2])).toEqual([17, 12, 29]);
+  });
+
+  it("supports $ in column ranges", () => {
+    expect(run([["3", "=sum($a:$a)"], ["4", ""], ["5", ""]]).values[0][1]).toBe(9);
+  });
+});
+
+describe("parseColumnSpec", () => {
+  it("parses single column letters into zero-based indices", () => {
+    expect(parseColumnSpec("a, c, e")).toEqual([0, 2, 4]);
+    expect(parseColumnSpec("s,t,u,x,y")).toEqual([18, 19, 20, 23, 24]);
+  });
+
+  it("expands letter ranges", () => {
+    expect(parseColumnSpec("c:e")).toEqual([2, 3, 4]);
+    expect(parseColumnSpec("e:c")).toEqual([2, 3, 4]); // order-independent
+  });
+
+  it("mixes singles and ranges, de-duplicates and sorts", () => {
+    expect(parseColumnSpec("b, c:e, a, d")).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it("is case-insensitive and ignores junk tokens", () => {
+    expect(parseColumnSpec("A, , C:E, 7, !!")).toEqual([0, 2, 3, 4]);
+  });
+});
+
+describe("hide() column directive", () => {
+  it("collects hidden columns and renders the directive cell empty", () => {
+    const { values, cellTypes, hiddenColumns } = run([
+      ["a", "b", "c", "d", "=hide(c,d)"],
+      ["1", "2", "3", "4", ""],
+    ]);
+    expect(hiddenColumns).toEqual([2, 3]);
+    expect(values[0][4]).toBe(""); // directive cell shows nothing
+    expect(cellTypes[0][4]).toBe(5); // directive cell type
+  });
+
+  it("supports ranges inside hide()", () => {
+    expect(run([["x", "=hide(a:c)"]]).hiddenColumns).toEqual([0, 1, 2]);
+  });
+
+  it("reports no hidden columns when there is no directive", () => {
+    expect(run([["1", "2"]]).hiddenColumns).toEqual([]);
+  });
+});
+
+describe("shiftFormula (fill-down/right reference adjustment)", () => {
+  it("shifts a1-style references down and right", () => {
+    expect(shiftFormula("a1+b1", 1, 0)).toBe("a2+b2");
+    expect(shiftFormula("a1+b1", 0, 1)).toBe("b1+c1");
+    expect(shiftFormula("a1+b1", 2, 1)).toBe("b3+c3");
+  });
+
+  it("preserves a leading '='", () => {
+    expect(shiftFormula("=a1+b1", 1, 0)).toBe("=a2+b2");
+  });
+
+  it("honours $ anchors on each part independently", () => {
+    expect(shiftFormula("$a$1+b1", 1, 0)).toBe("$a$1+b2");
+    expect(shiftFormula("$a1", 1, 1)).toBe("$a2"); // column fixed, row moves
+    expect(shiftFormula("a$1", 1, 1)).toBe("b$1"); // row fixed, column moves
+    expect(shiftFormula("$a$1", 3, 3)).toBe("$a$1"); // fully fixed
+  });
+
+  it("shifts both endpoints of an a1-style range", () => {
+    expect(shiftFormula("sum(a1:a3)", 1, 0)).toBe("sum(a2:a4)");
+    expect(shiftFormula("sum($a$1:$a$3)", 1, 0)).toBe("sum($a$1:$a$3)");
+  });
+
+  it("shifts column ranges by column delta only", () => {
+    expect(shiftFormula("sum(a:a)", 0, 1)).toBe("sum(b:b)");
+    expect(shiftFormula("sum(a:c)", 0, 1)).toBe("sum(b:d)");
+    expect(shiftFormula("sum($a:$a)", 0, 1)).toBe("sum($a:$a)");
+  });
+
+  it("shifts row ranges by row delta only", () => {
+    expect(shiftFormula("sum(1:1)", 1, 0)).toBe("sum(2:2)");
+    expect(shiftFormula("sum($1:$1)", 1, 0)).toBe("sum($1:$1)");
+  });
+
+  it("leaves c/r notation untouched (already explicit/relative)", () => {
+    expect(shiftFormula("+0c-1r", 1, 0)).toBe("+0c-1r");
+    expect(shiftFormula("2c3r", 1, 0)).toBe("2c3r");
+    expect(shiftFormula("a+1r", 1, 0)).toBe("a+1r");
+  });
+
+  it("preserves function names and numbers", () => {
+    expect(shiftFormula("ROUND(a1,2)", 1, 0)).toBe("ROUND(a2,2)");
+    expect(shiftFormula("a1*60", 1, 0)).toBe("a2*60");
+  });
+
+  it("keeps an anchored lookup table fixed while shifting the key", () => {
+    expect(shiftFormula("VLOOKUP(i2,[$a$2:$b$17],2,true)", 1, 0)).toBe(
+      "VLOOKUP(i3,[$a$2:$b$17],2,true)"
+    );
+  });
+
+  it("clamps below the table edges instead of going negative", () => {
+    expect(shiftFormula("a1", -5, 0)).toBe("a1"); // row can't go below 1
+    expect(shiftFormula("a1", 0, -3)).toBe("a1"); // column can't go below a
   });
 });
 
@@ -227,5 +351,105 @@ describe("functions", () => {
   it("isNumeric maps over a column (1 numeric, 0 non-numeric)", () => {
     const { values } = run([["3", "=isNumeric([a:a])"], ["x", ""], ["2", ""]]);
     expect(values.map((r) => r[1])).toEqual([0, 1, null]);
+  });
+});
+
+describe("percent literals", () => {
+  it("parses a percent value cell as its decimal fraction", () => {
+    expect(run([["60%"]]).values[0][0]).toBe(0.6);
+    expect(run([["100%"]]).values[0][0]).toBe(1);
+  });
+
+  it("evaluates a percent literal inside a formula", () => {
+    expect(run([["=50%"]]).values[0][0]).toBe(0.5);
+    expect(run([["=100%"]]).values[0][0]).toBe(1);
+  });
+
+  it("multiplies a value by a percent literal in a formula", () => {
+    expect(run([["200", "=a1*60%"]]).values[0][1]).toBe(120);
+  });
+
+  it("uses a percent value cell from a formula reference", () => {
+    expect(run([["60%", "=a1*100"]]).values[0][1]).toBe(60);
+  });
+
+  it("supports decimals in percent literals (formula and locale value)", () => {
+    expect(run([["=12.5%"]]).values[0][0]).toBe(0.125);
+    const v = run([["12,5%"]], {
+      decimalSeparator: ",",
+      groupingSeparator: ".",
+    }).values[0][0];
+    expect(v).toBe(0.125);
+  });
+
+  it("does not break the mod() function", () => {
+    expect(run([["=mod(10,3)"]]).values[0][0]).toBe(1);
+  });
+});
+
+describe("Excel-style functions", () => {
+  it("IF returns the matching branch", () => {
+    expect(run([["=IF(5>3, 10, 20)"]]).values[0][0]).toBe(10);
+    expect(run([["=IF(2>3, 10, 20)"]]).values[0][0]).toBe(20);
+  });
+
+  it("IF does not evaluate the untaken branch (lazy)", () => {
+    // The false branch would throw (VLOOKUP not found); IF must not run it.
+    const { values, errors } = run([
+      ["1", "A", "=IF(1>0, 99, VLOOKUP(7,[a1:b1],2,false))"],
+    ]);
+    expect(values[0][2]).toBe(99);
+    expect(errors[0][2]).toBeNull();
+  });
+
+  it("IFERROR returns the value when there is no error", () => {
+    expect(run([["=IFERROR(10, 5)"]]).values[0][0]).toBe(10);
+  });
+
+  it("IFERROR catches NaN and thrown errors", () => {
+    expect(run([["=IFERROR(0/0, 5)"]]).values[0][0]).toBe(5);
+    // VLOOKUP miss throws "N/A" inside mathjs; IFERROR returns the fallback.
+    // (Lookup table must not overlap the formula cell, or it self-references.)
+    const grid = [["1", "A"], ["2", "B"], ["=IFERROR(VLOOKUP(9,[a1:b2],2,false), 0)", ""]];
+    expect(run(grid).values[2][0]).toBe(0);
+  });
+
+  it("AND / OR / NOT evaluate logically", () => {
+    expect(run([["=AND(1>0, 2>1)"]]).values[0][0]).toBe(true);
+    expect(run([["=AND(1>0, 2<1)"]]).values[0][0]).toBe(false);
+    expect(run([["=OR(1<0, 2>1)"]]).values[0][0]).toBe(true);
+    expect(run([["=NOT(1>2)"]]).values[0][0]).toBe(true);
+  });
+
+  it("AVERAGE averages numbers, ignoring blanks", () => {
+    expect(run([["=AVERAGE(2,4,6)"]]).values[0][0]).toBe(4);
+    expect(run([["2", "4", "6", "=AVERAGE(a1:c1)"]]).values[0][3]).toBe(4);
+    // empty cell is ignored (consistent with sum())
+    expect(run([["2", "", "4", "=AVERAGE(a1:c1)"]]).values[0][3]).toBe(3);
+  });
+
+  it("ROUND rounds to the given number of decimals", () => {
+    expect(run([["=ROUND(3.14159, 2)"]]).values[0][0]).toBe(3.14);
+    expect(run([["=ROUND(2.7, 0)"]]).values[0][0]).toBe(3);
+  });
+
+  it("VLOOKUP approximate match finds the largest key <= lookup", () => {
+    const grid = [
+      ["0.7", "A"],
+      ["1", "B"],
+      ["1.3", "C"],
+      ["", "=VLOOKUP(1.2,[a1:b3],2,true)"],
+    ];
+    expect(run(grid).values[3][1]).toBe("B");
+  });
+
+  it("VLOOKUP exact match returns the row value", () => {
+    const grid = [
+      ["0.7", "A"],
+      ["1", "B"],
+      ["1.3", "C"],
+      ["", "=VLOOKUP(1,[a1:b3],2,false)"],
+    ];
+    expect(run(grid).values[3][1]).toBe("B");
   });
 });

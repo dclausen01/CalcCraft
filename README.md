@@ -21,6 +21,12 @@ most of the functions from [mathjs](https://mathjs.org/docs/reference/functions.
 #### Spreadsheet like references
 If the result is a vector or a matrix the output will be expanded to multiple cells, and the references for those cells are recomputed.
 The references supported are in `[a-z][0-9]+` format (lowercase)
+
+Excel-style absolute anchors are accepted on any reference: `$a$1`, `$a1`,
+`a$1`, and in ranges/matrices (`$a$2:$b$17`, `[$a$2:$b$17]`). The `$` is ignored
+when evaluating; it marks which part stays fixed when a formula is filled down
+(see fill-down).
+
 Besides this `a1` reference style, the cells can be referenced using colum-row notation: `[0-9]+c[0-9]r`, where `c` stands for column and `r` stands for row. So for addressing the `b3` cell we could also write `2c3r` (column 2, row 3).
 The column-row notation supports also relative referencing by adding a `+` or `-` before the number. 
 Combinations of the two are possible:
@@ -41,6 +47,67 @@ Formulas are evaluated using [mathjs](https://mathjs.org/docs/reference/function
 - **Unit arithmetic**: `=5 kg + 3000 g` automatically converts and returns `8 kg`
 - **Unit conversion**: `=5 inch to cm` converts between unit systems
 - **Matrix operations with units**: Full support for unit calculations in ranges and matrices
+### Excel-style functions
+In addition to the [mathjs](https://mathjs.org/docs/reference/functions.html)
+functions, CalcCraft provides familiar spreadsheet functions:
+
+| Function | Meaning |
+| --- | --- |
+| `IF(cond, then, else)` | Returns `then` if `cond` is truthy, otherwise `else`. Branches are evaluated lazily. |
+| `IFERROR(value, fallback)` | Returns `value`, or `fallback` if evaluating `value` errors (or is `NaN`). |
+| `AND(a, b, ...)` / `OR(...)` / `NOT(x)` | Logical combinators over any number of arguments. |
+| `AVERAGE(range or values)` | Mean of the numbers, ignoring blank cells (consistent with `sum()`). |
+| `VLOOKUP(key, [a1:b9], col, approx)` | Looks `key` up in the first column of a matrix and returns column `col` (1-based). `approx=true` (default) does a sorted nearest-not-exceeding match; `approx=false` requires an exact match and errors otherwise. |
+| `ROUND(x, n)` | Rounds `x` to `n` decimals. |
+
+Cell references keep CalcCraft's lowercase `a1` notation, and lookup tables use
+the matrix form `[a2:b17]`. Example grade lookup:
+
+| grade | scale | result                          |
+| ----- | ----- | ------------------------------- |
+| 0.7   | A     | =VLOOKUP(1.2, [a2:b4], 2, true) |
+| 1     | B     |                                 |
+| 1.3   | C     |                                 |
+
+### Percent literals
+Excel-style percentages are supported both as plain values and inside formulas:
+- **Value cell**: `60%` is stored as `0.6` (locale-aware, e.g. `12,5%` -> `0.125`)
+- **In a formula**: `=a1*60%` is evaluated as `a1*(60/100)`
+
+| price | discount | final               |
+| ----- | -------- | ------------------- |
+| 200   | 60%      | =a1*(1-b1)          |
+
+Only a number directly followed by `%` is converted, so `mod(10, 3)` and other
+expressions are unaffected.
+
+### Hiding columns
+Helper columns (intermediate calculations) can be hidden from the rendered table
+with a `=hide(...)` directive placed in any free cell. List the columns by their
+letter, with ranges allowed:
+
+| a   | b   | helper1 | helper2 | result    |             |
+| --- | --- | ------- | ------- | --------- | ----------- |
+| 1   | 2   | =a2*2   | =b2*2   | =c2+d2    | =hide(c:d)  |
+
+Columns `c` and `d` are hidden in reading and live-preview mode, while the
+formulas keep working. The directive cell itself renders empty. The underlying
+markdown is unchanged, so switch to source mode to see or edit hidden columns.
+
+### Fill down
+Place the cursor in a cell that contains a formula and run **CalcCraft: Fill
+formula down** (command palette, or the editor right-click menu). The formula is
+copied into every row below it in the same column, with references adjusted just
+like dragging the fill handle in a spreadsheet:
+
+- `a1`-style references shift with the row (`=a2+b2` becomes `=a3+b3`, ...)
+- `$` anchors stay put (`$b$1` keeps pointing at `b1` in every filled row)
+- the `c`/`r` relative notation is left unchanged (it is already relative)
+
+The filled formulas are written into the note's markdown, so they persist and
+can be edited individually afterwards. Filling overwrites the target cells down
+to the end of the table.
+
 ### Matrix and Range Operations
 Ranges between `[...]` are expanded as matrices and can be used for matrix operations:
 - **Standard ranges**: `a1:c3` flattens to a 1D array for functions like `sum()`

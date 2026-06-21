@@ -68,13 +68,155 @@ math.import({
     }
 }, { override: true });
 
+// --- Excel-style helper functions -------------------------------------------
+// These give spreadsheet users familiar names (IF, VLOOKUP, ...). Cell
+// references still use CalcCraft's lowercase a1 notation; only the function
+// names mirror Excel. Names that already exist in mathjs (round, and, or, not,
+// mean) are left untouched - we add the uppercase Excel variants alongside.
+
+function isTruthy(v: any): boolean {
+    if (v === null || v === undefined) return false;
+    if (typeof v === "boolean") return v;
+    if (typeof v === "number") return v !== 0 && !Number.isNaN(v);
+    if (typeof v === "string") return v.length > 0;
+    return true;
+}
+
+function toPlainArray(value: any): any {
+    if (value && typeof value.toArray === "function") return value.toArray();
+    return value;
+}
+
+function flattenValues(args: any[]): any[] {
+    const out: any[] = [];
+    for (const raw of args) {
+        const a = toPlainArray(raw);
+        if (Array.isArray(a)) out.push(...flattenValues(a));
+        else out.push(a);
+    }
+    return out;
+}
+
+function toMatrix2D(value: any): any[][] {
+    const arr = toPlainArray(value);
+    if (!Array.isArray(arr)) return [[arr]];
+    if (arr.length === 0) return [];
+    if (!Array.isArray(arr[0])) return arr.map((v: any) => [v]); // column vector
+    return arr;
+}
+
+// IF and IFERROR use rawArgs so branches are evaluated lazily (Excel semantics).
+function ifFn(args: any[], _math: any, scope: any): any {
+    const cond = args[0].compile().evaluate(scope);
+    if (isTruthy(cond)) {
+        return args.length > 1 ? args[1].compile().evaluate(scope) : true;
+    }
+    return args.length > 2 ? args[2].compile().evaluate(scope) : false;
+}
+(ifFn as any).rawArgs = true;
+
+function iferrorFn(args: any[], _math: any, scope: any): any {
+    try {
+        const value = args[0].compile().evaluate(scope);
+        // Treat NaN as an error, like Excel's error values.
+        if (typeof value === "number" && Number.isNaN(value)) throw new Error("NaN");
+        return value;
+    } catch (e) {
+        return args.length > 1 ? args[1].compile().evaluate(scope) : "";
+    }
+}
+(iferrorFn as any).rawArgs = true;
+
+function averageFn(...args: any[]): number {
+    // Consistent with this plugin's sum(): blanks (which become 0) are ignored.
+    const nums = flattenValues(args).filter(
+        (v: any) => typeof v === "number" && isFinite(v) && v !== 0
+    );
+    if (nums.length === 0) return 0;
+    return nums.reduce((s: number, v: number) => s + v, 0) / nums.length;
+}
+
+function vlookupFn(lookup: any, table: any, colIndex: any, approx: any = true): any {
+    const rows = toMatrix2D(table);
+    const idx = (typeof colIndex === "number" ? colIndex : parseInt(colIndex, 10)) - 1;
+    const exact = approx === false || approx === 0;
+
+    if (exact) {
+        for (const row of rows) {
+            if (row[0] === lookup) return row[idx];
+        }
+        throw new Error("N/A");
+    }
+
+    // Approximate match: assumes the first column is sorted ascending and
+    // returns the row with the largest key that is still <= lookup.
+    let match: any[] | null = null;
+    for (const row of rows) {
+        const key = row[0];
+        if (typeof key === "number" && typeof lookup === "number") {
+            if (key <= lookup) match = row;
+            else break;
+        }
+    }
+    if (match === null) throw new Error("N/A");
+    return match[idx];
+}
+
+math.import(
+    {
+        IF: ifFn,
+        if: ifFn,
+        IFERROR: iferrorFn,
+        iferror: iferrorFn,
+        AND: (...args: any[]) => flattenValues(args).every(isTruthy),
+        OR: (...args: any[]) => flattenValues(args).some(isTruthy),
+        NOT: (x: any) => !isTruthy(x),
+        AVERAGE: averageFn,
+        average: averageFn,
+        VLOOKUP: vlookupFn,
+        vlookup: vlookupFn,
+        ROUND: (x: any, n: number = 0) => math.round(x, n)
+    },
+    { override: true }
+);
+
 const evaluate = math.evaluate;
 
 enum celltype {
     number = 1,
     formula,
     matrix,
-    escaped_text
+    escaped_text,
+    directive
+}
+
+/**
+ * Parse the column list of a `=hide(...)` directive into zero-based column
+ * indices. Accepts single letters and letter ranges, e.g. "s,t,u" or "c:e".
+ * Case-insensitive; unknown tokens are ignored. Pure and DOM-free for testing.
+ */
+export function parseColumnSpec(spec: string): number[] {
+    const toIdx = (s: string) => s.trim().toLowerCase().charCodeAt(0) - 97;
+    const cols: number[] = [];
+    const add = (c: number) => {
+        if (c >= 0 && c < 26 && !cols.includes(c)) cols.push(c);
+    };
+
+    for (const part of spec.split(",")) {
+        const token = part.trim();
+        if (!token) continue;
+        const range = token.match(/^([a-z]):([a-z])$/i);
+        if (range) {
+            let a = toIdx(range[1]);
+            let b = toIdx(range[2]);
+            if (a > b) [a, b] = [b, a];
+            for (let c = a; c <= b; c++) add(c);
+        } else if (/^[a-z]$/i.test(token)) {
+            add(toIdx(token));
+        }
+        // anything else (numbers, symbols) is ignored
+    }
+    return cols.sort((x, y) => x - y);
 }
 enum cellstatus {
     none = 1,
@@ -94,6 +236,7 @@ export interface TableResult {
     values: any[][];
     errors: (string | null)[][];
     cellTypes: celltype[][];
+    hiddenColumns: number[];
 }
 
 /**
@@ -106,6 +249,97 @@ export interface EvaluatorSettings {
     groupingSeparator?: string;
 }
 
+/**
+ * Adjust the references in a formula as if it were copied (filled) by `dRow`
+ * rows and `dCol` columns, Excel-style.
+ *
+ * Rules:
+ * - Only `a1`-style references (letter column + number row) and pure column
+ *   (`a:a`) / row (`1:1`) ranges are shifted.
+ * - `$` anchors freeze the part they precede ($a$1 fully, $a1 column, a$1 row).
+ * - The `c`/`r` column-row notation (`+0c-1r`, `2c3r`, `a+1r`) is left as-is;
+ *   it is already explicit/relative and adjusts on its own.
+ * - Shifts are clamped at the table edge (row >= 1, column >= a).
+ *
+ * Pure and DOM-free so it can be unit-tested in isolation.
+ */
+export function shiftFormula(formula: string, dRow: number, dCol: number): string {
+    let prefix = "";
+    if (formula.startsWith("=")) {
+        prefix = "=";
+        formula = formula.slice(1);
+    }
+
+    const shiftLetter = (letter: string, anchored: boolean): string => {
+        if (anchored) return letter;
+        const idx = letter.charCodeAt(0) - 97 + dCol;
+        const clamped = Math.max(0, Math.min(25, idx));
+        return String.fromCharCode(97 + clamped);
+    };
+    const shiftNum = (num: string, anchored: boolean): string => {
+        if (anchored) return num;
+        return String(Math.max(1, parseInt(num, 10) + dRow));
+    };
+
+    let out = "";
+    let i = 0;
+    while (i < formula.length) {
+        const rest = formula.slice(i);
+        let m: RegExpMatchArray | null;
+
+        // 1. function name (e.g. "ROUND(") - copy verbatim
+        if ((m = rest.match(/^[a-zA-Z]{3,}\(/))) {
+            out += m[0];
+            i += m[0].length;
+            continue;
+        }
+        // 2. column-row notation (2c3r, +0c-1r, 2c7) - leave untouched
+        if ((m = rest.match(/^[+-]?\d+c([+-]?\d+r|\d+)/))) {
+            out += m[0];
+            i += m[0].length;
+            continue;
+        }
+        // 3. letter + relative-row notation (a+1r, a-3r, a1r) - leave untouched
+        if ((m = rest.match(/^\$?[a-z][+-]?\d+r/))) {
+            out += m[0];
+            i += m[0].length;
+            continue;
+        }
+        // 4. a1-style cell: shift letter and/or row honouring $ anchors
+        if ((m = rest.match(/^(\$?)([a-z])(\$?)(\d+)/))) {
+            const [, colA, letter, rowA, digits] = m;
+            out += colA + shiftLetter(letter, colA === "$") + rowA + shiftNum(digits, rowA === "$");
+            i += m[0].length;
+            continue;
+        }
+        // 5. column range (a:a) - shift letters by column delta
+        if ((m = rest.match(/^(\$?)([a-z]):(\$?)([a-z])/))) {
+            const [, a1, l1, a2, l2] = m;
+            out += a1 + shiftLetter(l1, a1 === "$") + ":" + a2 + shiftLetter(l2, a2 === "$");
+            i += m[0].length;
+            continue;
+        }
+        // 6. row range (1:1) - shift numbers by row delta
+        if ((m = rest.match(/^(\$?)(\d+):(\$?)(\d+)/))) {
+            const [, a1, n1, a2, n2] = m;
+            out += a1 + shiftNum(n1, a1 === "$") + ":" + a2 + shiftNum(n2, a2 === "$");
+            i += m[0].length;
+            continue;
+        }
+        // 7. plain number run - copy verbatim
+        if ((m = rest.match(/^\d+/))) {
+            out += m[0];
+            i += m[0].length;
+            continue;
+        }
+        // default: copy a single character
+        out += formula[i];
+        i += 1;
+    }
+
+    return prefix + out;
+}
+
 export class TableEvaluator {
     tableData: any[][] = [];
     formulaData: any[][] = [];
@@ -116,6 +350,7 @@ export class TableEvaluator {
     children: [number, number][][][] = [];
     maxcols: number = 0;
     maxrows: number = 0;
+    hiddenColumns: number[] = [];
     useBool = false;
     settings: EvaluatorSettings = {};
 
@@ -154,6 +389,7 @@ export class TableEvaluator {
         this.children = [];
         this.maxcols = 0;
         this.maxrows = 0;
+        this.hiddenColumns = [];
 
         // Initialize arrays
         this.initializeArrays(gridData);
@@ -167,7 +403,8 @@ export class TableEvaluator {
         return {
             values: this.tableData,
             errors: this.errors,
-            cellTypes: this.celltype
+            cellTypes: this.celltype,
+            hiddenColumns: this.hiddenColumns
         };
     }
 
@@ -199,7 +436,20 @@ export class TableEvaluator {
             for (let colIndex = 0; colIndex < this.maxcols; colIndex++) {
                 const cellContent = gridData[rowIndex]?.[colIndex] || "";
 
-                if (cellContent.startsWith("'=")) {
+                const hideMatch = cellContent.match(/^=hide\((.*)\)$/i);
+
+                if (hideMatch) {
+                    // Column-visibility directive: collect the columns to hide
+                    // and render this cell empty. Not a computable formula.
+                    this.formulaData[rowIndex][colIndex] = null;
+                    this.cellstatus[rowIndex][colIndex] = cellstatus.iscomputed;
+                    this.celltype[rowIndex][colIndex] = celltype.directive;
+                    this.tableData[rowIndex][colIndex] = "";
+                    for (const c of parseColumnSpec(hideMatch[1])) {
+                        if (!this.hiddenColumns.includes(c)) this.hiddenColumns.push(c);
+                    }
+                    this.hiddenColumns.sort((x, y) => x - y);
+                } else if (cellContent.startsWith("'=")) {
                     // Store the content WITHOUT the apostrophe for display
                     this.formulaData[rowIndex][colIndex] = null;
                     this.cellstatus[rowIndex][colIndex] = cellstatus.iscomputed;
@@ -218,10 +468,17 @@ export class TableEvaluator {
                     this.celltype[rowIndex][colIndex] = celltype.number;
                     this.tableData[rowIndex][colIndex] = null;
                 } else {
-                    // Value cell - could be number, unit, or text
+                    // Value cell - could be number, unit, percent, or text
                     this.formulaData[rowIndex][colIndex] = null;
                     this.cellstatus[rowIndex][colIndex] = cellstatus.iscomputed;
                     this.celltype[rowIndex][colIndex] = celltype.number;
+
+                    // Percent literal (e.g. "60%" -> 0.6) takes precedence
+                    const percent = this.parsePercentLiteral(cellContent);
+                    if (percent !== null) {
+                        this.tableData[rowIndex][colIndex] = percent;
+                        continue;
+                    }
 
                     // Parse for units
                     const parsed = this.parseUnitValue(cellContent);
@@ -268,6 +525,10 @@ export class TableEvaluator {
     }
 
     ref2cords(ref: string, formulaRow = 0, formulaCol = 0): [number, number] | null {
+        // Strip Excel-style absolute-reference anchors ($a$1 -> a1). The anchors
+        // are only meaningful for fill-down (which rewrites the source text);
+        // for evaluation they resolve to the same coordinates.
+        ref = ref.replace(/\$/g, "");
         const match = ref.match(/^([a-z]+|([+-]?)\d+c)(\d+|([+-]?)\d+r)$/);
 
         if (!match) {
@@ -298,7 +559,7 @@ export class TableEvaluator {
     }
 
     letter2col(letter: string): number {
-        return letter.charCodeAt(0) - "a".charCodeAt(0);
+        return letter.replace(/\$/g, "").charCodeAt(0) - "a".charCodeAt(0);
     }
 
     number2row(nr: number): number {
@@ -315,6 +576,28 @@ export class TableEvaluator {
                 }
             }
         }
+    }
+
+
+    /**
+     * Excel-style percent literal in a value cell, e.g. "60%" -> 0.6 or
+     * "12,5%" (locale) -> 0.125. Returns null if the cell is not a percent.
+     */
+    private parsePercentLiteral(cellContent: string): number | null {
+        const match = String(cellContent).trim().match(/^(-?[\d.,\s]+)%$/);
+        if (!match) return null;
+        const value = this.parseLocaleNumber(match[1]);
+        if (isNaN(value) || !isFinite(value)) return null;
+        return value / 100;
+    }
+
+    /**
+     * Rewrite Excel-style percent literals inside a formula so mathjs sees a
+     * plain fraction: e.g. "a1*60%" -> "a1*(60/100)". Only a number immediately
+     * followed by "%" is converted; "x % y" (modulo, with spaces) is untouched.
+     */
+    private convertPercentLiterals(formula: string): string {
+        return formula.replace(/(\d+(?:\.\d+)?)%/g, "($1/100)");
     }
 
 
@@ -396,7 +679,7 @@ export class TableEvaluator {
             }
 
             this.cellstatus[row][col] = cellstatus.computing;
-            const formula = this.formulaData[row][col].slice(1);
+            const formula = this.convertPercentLiterals(this.formulaData[row][col].slice(1));
 
             if (debug) {
                 this.debug(`we are asked to fill in at ${row},${col} with formula: ${formula}`);
@@ -665,17 +948,19 @@ try {
             } else {
                 const restformula = formula.slice(i);
                 this.debug(`rest formula is:${restformula}`);
-                const matchCell = restformula.match(/^([a-z]|[+-]?\d+c)([+-]?\d+r|\d+)/);
+                // `\$?` allows Excel-style absolute anchors ($a$1); they are
+                // stripped during resolution (see ref2cords / letter2col).
+                const matchCell = restformula.match(/^\$?([a-z]|[+-]?\d+c)\$?([+-]?\d+r|\d+)/);
 
                 //const matchOp = restformula.match(/^[+\-*/]/);
 
                 const matchRange = restformula.match(
-                    /^([a-z]|[+-]?\d+c)([+-]?\d+r|\d+):([a-z]|[+-]?\d+c)([+-]?\d+r|\d+)/
+                    /^\$?([a-z]|[+-]?\d+c)\$?([+-]?\d+r|\d+):\$?([a-z]|[+-]?\d+c)\$?([+-]?\d+r|\d+)/
                 );
 
                 const matchMatrix = restformula.match(
                     //basically matchRange but between `[` `]`
-                    /^\[([a-z]|[+-]\d+c)([+-]\d+r|\d+):([a-z]|[+-]\d+c)([+-]\d+r|\d+)\]/
+                    /^\[\$?([a-z]|[+-]\d+c)\$?([+-]\d+r|\d+):\$?([a-z]|[+-]\d+c)\$?([+-]\d+r|\d+)\]/
                 );
 
                 const matchformula = restformula.match(/^[a-zA-Z]{3,}\(/);
@@ -685,9 +970,9 @@ try {
                 //const matchRange=restformula.match(/^[a-z]\d+:[a-z]\d+/); //normal range
                 //const matchRange = restformula.match(/^[a-z](?:\+|-)?\d+:[a-z](?:\+|-)?\d+/);
 
-                const matchRangeCol = restformula.match(/^[a-z]:[a-z]/); //column range
-                const matchRangeColMatrix = restformula.match(/^\[[a-z]:[a-z]\]/); //column range
-                const matchRangeRow = restformula.match(/^\d+:\d+/); //row range
+                const matchRangeCol = restformula.match(/^\$?[a-z]:\$?[a-z]/); //column range
+                const matchRangeColMatrix = restformula.match(/^\[\$?[a-z]:\$?[a-z]\]/); //column range
+                const matchRangeRow = restformula.match(/^\$?\d+:\$?\d+/); //row range
 
                 if (matchRange) {
                     /* normal range a3:b7 or a-3:b+7, or anything in between;
@@ -730,7 +1015,7 @@ try {
                 } else if (matchRangeRow) {
                     this.debug(`we matched a row range`);
                     i += matchRangeRow[0].length - 1;
-                    const [start, end] = matchRangeRow[0].split(":"); // Split the range into start and end
+                    const [start, end] = matchRangeRow[0].replace(/\$/g, "").split(":"); // Split the range into start and end (anchors stripped)
                     const startCol = 0;
                     const endCol = this.maxcols - 1;
                     const startRow = this.number2row(parseInt(start));
