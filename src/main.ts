@@ -2,6 +2,7 @@
 import { Plugin, MarkdownPostProcessorContext, App, MarkdownView, debounce, TFile, Editor, Menu, Notice } from "obsidian";
 import { CalcCraftSettingsTab, DefaultSettings } from "./settings";
 import { TableEvaluator, shiftFormula } from "./table-evaluator";
+import { extractCellText } from "./dom-text";
 
 const debug = false;
 
@@ -236,15 +237,10 @@ export default class CalcCraftPlugin extends Plugin {
             gridData[i] = [];
             
             validCells.forEach((cellEl, j) => {
+                // Reconstruct the source text so markdown emphasis does not eat
+                // multiplication asterisks (a*b+c*d -> a<em>b+c</em>d).
                 const wrapper = cellEl.querySelector('.table-cell-wrapper');
-                let cellContent = wrapper ? wrapper.textContent : cellEl.textContent;
-                cellContent = (cellContent || "").trim();
-                
-                // DEBUG: Log what we're extracting
-                if (cellContent.startsWith('=') || cellContent.startsWith("'=")) {
-                    //this.debug(`Extracting cell [${i},${j}]:`, cellContent);
-                }
-                
+                const cellContent = extractCellText(wrapper || cellEl).trim();
                 gridData[i][j] = cellContent;
             });
         });
