@@ -166,6 +166,24 @@ describe("errors", () => {
     const { errors } = run([["=a1+@@"]]);
     expect(errors[0][0]).toBeTruthy();
   });
+
+  it("rejects formulas containing forbidden identifiers", () => {
+    const { errors } = run([['=import("fs")']]);
+    expect(errors[0][0]).toContain("forbidden");
+  });
+
+  it("rejects overly long formulas", () => {
+    const longFormula = "=1" + "+1".repeat(600); // > 1000 chars
+    const { errors } = run([[longFormula]]);
+    expect(errors[0][0]).toContain("too long");
+  });
+
+  it("still allows matrices that contain quoted text (not a false positive)", () => {
+    // The previous (dead) sanitizer would have rejected bracketed strings; the
+    // new guard must not. isNumeric over a text column relies on this.
+    const { values } = run([["3", "=isNumeric([a:a])"], ["x", ""], ["2", ""]]);
+    expect(values.map((r) => r[1])).toEqual([0, 1, null]);
+  });
 });
 
 describe("escaped text", () => {
@@ -185,16 +203,15 @@ describe("locale-aware number parsing", () => {
     expect(v).toBe(4);
   });
 
-  it("KNOWN BUG: grouping separator is NOT stripped (double-escaped regex)", () => {
-    // With decimal "," and grouping ".", "1.234" SHOULD parse as 1234 (-> 1235).
-    // Today parseLocaleNumber double-escapes the grouping char, so the "." is
-    // never removed and "1.234" is parsed as 1.234 (-> 2.234). Locked here so a
-    // fix in Phase 1 is a deliberate, visible change.
+  it("strips the grouping separator when parsing input", () => {
+    // With decimal "," and grouping ".", "1.234" parses as 1234 (-> 1235).
+    // (Phase 1 fixed a double-escaped regex that previously left the grouping
+    // separator in place, yielding 2.234.)
     const v = run([["1.234", "=a1+1"]], {
       decimalSeparator: ",",
       groupingSeparator: ".",
     }).values[0][1];
-    expect(v).toBe(2.234);
+    expect(v).toBe(1235);
   });
 });
 

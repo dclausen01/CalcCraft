@@ -96,6 +96,16 @@ export interface TableResult {
     cellTypes: celltype[][];
 }
 
+/**
+ * The subset of plugin settings the evaluator actually needs. Kept local (and
+ * minimal) so the evaluator stays free of any Obsidian imports and remains
+ * unit-testable in plain Node.
+ */
+export interface EvaluatorSettings {
+    decimalSeparator?: string;
+    groupingSeparator?: string;
+}
+
 export class TableEvaluator {
     tableData: any[][] = [];
     formulaData: any[][] = [];
@@ -107,26 +117,31 @@ export class TableEvaluator {
     maxcols: number = 0;
     maxrows: number = 0;
     useBool = false;
-    settings: any;
+    settings: EvaluatorSettings = {};
 
     private parseLocaleNumber(str: string): number {
     const decimal = this.settings.decimalSeparator || ".";
     const grouping = this.settings.groupingSeparator || ",";
 
+    // Escape any regex-special characters in the separators so they are matched
+    // literally. (Previously the grouping pattern was double-escaped, so the
+    // grouping separator was never actually stripped.)
+    const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
     // Remove grouping separators, replace decimal with dot for parseFloat
     const normalized = String(str)
-      .replace(new RegExp('\\' + grouping.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '')
-      .replace(decimal, '.');
+      .replace(new RegExp(escapeRegex(grouping), "g"), "")
+      .replace(new RegExp(escapeRegex(decimal)), ".");
 
     return parseFloat(normalized);
     }
 
 
-    evaluateTable(gridData: string[][], settings?: any): TableResult {
+    evaluateTable(gridData: string[][], settings?: EvaluatorSettings): TableResult {
       // Set settings with defaults
-      this.settings = settings || { 
-        decimalSeparator: ".", 
-        groupingSeparator: "," 
+      this.settings = settings || {
+        decimalSeparator: ".",
+        groupingSeparator: ","
       };
       
       // Reset all arrays
@@ -231,7 +246,9 @@ export class TableEvaluator {
                 try {
                     this.getValueByCoordinates(i, j);
                 } catch (error) {
-                    console.log(error);
+                    // Errors are already recorded per-cell in this.errors; keep
+                    // them off the console in normal use.
+                    this.debug(error);
                 }
             }
         }
@@ -387,6 +404,7 @@ export class TableEvaluator {
 
             let processedformula;
             try {
+                this.assertSafeFormula(formula);
                 processedformula = this.parsefunction(formula, [row, col]);
             } catch (error) {
                 if (error instanceof InfiniteLoop) {
@@ -804,54 +822,24 @@ try {
     }
 
 
-    private sanitizeFormula(formula: string): string {
-        // Remove potentially dangerous patterns
-        const dangerous = [
-            /import\s*\(/gi,
-            /require\s*\(/gi,
-            /eval\s*\(/gi,
-            /Function\s*\(/gi,
-            /constructor/gi,
-            /prototype/gi,
-            /__proto__/gi,
-            /process\./gi,
-            /global\./gi,
-            /window\./gi,
-            /document\./gi
-        ];
-
-        for (const pattern of dangerous) {
-            if (pattern.test(formula)) {
-                throw new Error(`Formula contains forbidden pattern: ${pattern.source}`);
-            }
-        }
-
-        // Limit formula length to prevent DoS
+    /**
+     * Guard a raw formula before it is parsed and handed to mathjs.
+     *
+     * This is intentionally minimal and conservative: it rejects obviously
+     * dangerous identifiers (prototype-pollution / sandbox-escape vectors) and
+     * caps the length to avoid pathological inputs. It deliberately does NOT try
+     * to validate the processed expression with broad patterns, because legit
+     * features (e.g. matrices containing quoted text) use brackets and strings.
+     */
+    private assertSafeFormula(formula: string): void {
         if (formula.length > 1000) {
-            throw new Error("Formula too long");
+            throw new Error("formula\ntoo long");
         }
 
-        return formula.trim();
-    }
-
-    private sanitizeProcessedFormula(processedFormula: string): string {
-        // Validate the final formula before mathjs gets it
-
-        // Check for suspicious function calls that might have been constructed
-        const suspiciousPatterns = [
-            /eval\s*\(/gi,
-            /Function\s*\(/gi,
-            /constructor\s*\(/gi,
-            /\[.*["'].*["'].*\]/gi, // bracket notation with strings
-        ];
-
-        for (const pattern of suspiciousPatterns) {
-            if (pattern.test(processedFormula)) {
-                throw new Error("Processed formula contains suspicious patterns");
-            }
+        const forbidden = /\b(import|require|eval|Function|constructor|prototype|__proto__|process|globalThis|window|document)\b/;
+        if (forbidden.test(formula)) {
+            throw new Error("forbidden\npattern");
         }
-
-        return processedFormula;
     }
 
     debug(message: any): void {
