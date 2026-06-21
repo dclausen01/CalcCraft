@@ -252,17 +252,21 @@ der Anker `$c$2` bleibt fix.
 
 ## 12. Realistische Mini-Notenliste (Showcase)
 
-Kombiniert Prozent-Gewichtung, `average`, `round`, `VLOOKUP` mit `$`-Anker.
+Kombiniert Prozent-Gewichtung, `average`, `round` und `VLOOKUP`.
 Die Notenskala (Spalten **j/k**) steht rechts in derselben Tabelle.
 Die Note-Formel (Spalte **h**) eignet sich ideal zum **Herunterziehen**.
 
-| Vorname | Name    | UB  | K1  | K2  | Schnitt schr.           | Gesamt                       | Note                          |     | Pkt | Note |
-| ------- | ------- | --- | --- | --- | ----------------------- | ---------------------------- | ----------------------------- | --- | --- | ---- |
-| Anna    | Müller  | 12  | 10  | 14  | =round(average(d2:e2),1)| =round(c2*40%+f2*60%,1)      | =VLOOKUP(g2,[$j$2:$k$6],2,true)|     | 0   | 6    |
-| Ben     | Schmidt | 9   | 8   | 11  | =round(average(d3:e3),1)| =round(c3*40%+f3*60%,1)      | =VLOOKUP(g3,[$j$2:$k$6],2,true)|     | 8   | 4    |
-| Cara    | Wolf    | 14  | 15  | 13  | =round(average(d4:e4),1)| =round(c4*40%+f4*60%,1)      | =VLOOKUP(g4,[$j$2:$k$6],2,true)|     | 11  | 2    |
-|         |         |     |     |     |                         |                              |                               |     | 13  | 1    |
-|         |         |     |     |     |                         |                              |                               |     | 15  | 1    |
+> Für die Lookup-Tabelle wird hier der **Spalten-Range `[j:k]`** verwendet (statt
+> `[$j$2:$k$6]`). Vorteil: kein `$` (vermeidet Obsidians Mathe-Konflikt, s. u.)
+> und beim Herunterziehen bleibt der Range automatisch fix.
+
+| Vorname | Name    | UB  | K1  | K2  | Schnitt schr.           | Gesamt                       | Note                       |     | Pkt | Note |
+| ------- | ------- | --- | --- | --- | ----------------------- | ---------------------------- | -------------------------- | --- | --- | ---- |
+| Anna    | Müller  | 12  | 10  | 14  | =round(average(d2:e2),1)| =round(c2*40%+f2*60%,1)      | =VLOOKUP(g2,[j:k],2,true)  |     | 0   | 6    |
+| Ben     | Schmidt | 9   | 8   | 11  | =round(average(d3:e3),1)| =round(c3*40%+f3*60%,1)      | =VLOOKUP(g3,[j:k],2,true)  |     | 8   | 4    |
+| Cara    | Wolf    | 14  | 15  | 13  | =round(average(d4:e4),1)| =round(c4*40%+f4*60%,1)      | =VLOOKUP(g4,[j:k],2,true)  |     | 11  | 2    |
+|         |         |     |     |     |                         |                              |                            |     | 13  | 1    |
+|         |         |     |     |     |                         |                              |                            |     | 15  | 1    |
 
 **Erwartete Ergebnisse:**
 

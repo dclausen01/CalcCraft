@@ -149,14 +149,18 @@ function vlookupFn(lookup: any, table: any, colIndex: any, approx: any = true): 
     }
 
     // Approximate match: assumes the first column is sorted ascending and
-    // returns the row with the largest key that is still <= lookup.
+    // returns the row with the largest key that is still <= lookup. Trailing
+    // blank rows (which read as 0) and any non-ascending tail are ignored, so a
+    // whole-column lookup table like [j:k] stays robust.
     let match: any[] | null = null;
+    let lastKey = -Infinity;
     for (const row of rows) {
         const key = row[0];
-        if (typeof key === "number" && typeof lookup === "number") {
-            if (key <= lookup) match = row;
-            else break;
-        }
+        if (typeof key !== "number" || !isFinite(key)) continue;
+        if (key < lastKey) break; // data stopped ascending -> past the table
+        lastKey = key;
+        if (key <= lookup) match = row;
+        else break;
     }
     if (match === null) throw new Error("N/A");
     return match[idx];
