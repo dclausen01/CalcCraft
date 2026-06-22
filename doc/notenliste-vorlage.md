@@ -30,11 +30,16 @@ wirkt für alle Schüler. Einfach direkt in der Tabelle anpassen:
 | k3     | Gewicht schriftlich           | `=100%-§k§2` | automatisch |
 | **k4** | Gewicht **Klausur 1**         | `50%`    | ✏️ ja   |
 | k5     | Gewicht Klausur 2             | `=100%-§k§4` | automatisch |
-| **k6** | Endnote: Gewicht **akt. Hj**  | `60%`    | ✏️ ja   |
-| k7     | Endnote: Gewicht 1. Hj        | `=100%-§k§6` | automatisch |
+| **k6** | Endnote: Gewicht **2. Hj. (aktuell)** | `60%`    | ✏️ ja   |
+| k7     | Endnote: Gewicht 1. Hj.       | `=100%-§k§6` | automatisch |
 
 Du setzt also nur **k2, k4, k6** – die Gegengewichte (`100% − …`) rechnen sich
 selbst (mündlich + schriftlich = 100 % usw.).
+
+**Endnote (Spalte i):** Ist eine **Note 1. Hj.** eingetragen, wird sie mit der
+aktuellen Note (2. Hj.) verrechnet – standardmäßig **1. Hj. 40 % : 2. Hj. 60 %**.
+Ohne Eintrag in „Note 1. Hj." bleibt die Endnote = aktuelle Note. Steuerung über
+`k6`/`k7`.
 
 > Warum `§` und `·`? `$` rendert Obsidian als Mathe-Formel, `*` als Kursiv. Die
 > neutralen Zeichen `§` (Anker) und `·` (Mal) bleiben unverändert. `$`, `*`
@@ -53,8 +58,8 @@ selbst (mündlich + schriftlich = 100 % usw.).
 | Ben     | Schmidt | 9   | 8         | 11        | 3           | =round(c3·§k§2+(d3·§k§4+e3·§k§5)·§k§3,1)   | =VLOOKUP(g3,[l:m],2,true)  | =IF(f3>0,round(h3·§k§6+f3·§k§7,1),h3)       | Gew. schriftlich     | =100%-§k§2   | 1         | 5.3        |
 | Cara    | Wolf    | 14  | 15        | 13        |             | =round(c4·§k§2+(d4·§k§4+e4·§k§5)·§k§3,1)   | =VLOOKUP(g4,[l:m],2,true)  | =IF(f4>0,round(h4·§k§6+f4·§k§7,1),h4)       | Gew. Klausur 1       | 50%          | 2         | 5          |
 |         |         |     |           |           |             |                                           |                            |                                            | Gew. Klausur 2       | =100%-§k§4   | 3         | 4.7        |
-|         |         |     |           |           |             |                                           |                            |                                            | Endnote: akt. Hj     | 60%          | 4         | 4.3        |
-|         |         |     |           |           |             |                                           |                            |                                            | Endnote: 1. Hj       | =100%-§k§6   | 5         | 4          |
+|         |         |     |           |           |             |                                           |                            |                                            | Endnote: 2. Hj.      | 60%          | 4         | 4.3        |
+|         |         |     |           |           |             |                                           |                            |                                            | Endnote: 1. Hj.      | =100%-§k§6   | 5         | 4          |
 |         |         |     |           |           |             |                                           |                            |                                            |                      |              | 6         | 3.7        |
 |         |         |     |           |           |             |                                           |                            |                                            | Skala ausblenden:    | =hide(l,m)   | 7         | 3.3        |
 |         |         |     |           |           |             |                                           |                            |                                            |                      |              | 8         | 3          |
