@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Obsidian-friendly symbols** so formulas don't fight markdown rendering:
+  - `·`, `×`, `⋅` are accepted as multiplication (instead of `*`, which renders
+    as italics), and `÷` as division.
+  - `§` is accepted as an absolute-reference anchor equivalent to `$` (which
+    Obsidian renders as LaTeX math): `[§j§2:§k§6]`, `=a2·§b§2`. Fill-down keeps
+    the `§` and freezes the anchored part, just like `$`.
+  - The classic `*`, `/` and `$` continue to work.
+
 - **Fill down**: the *CalcCraft: Fill formula down* command (also in the editor
   right-click menu) copies the formula in the current cell down its column to
   the end of the table, adjusting `a1`-style references per row while keeping

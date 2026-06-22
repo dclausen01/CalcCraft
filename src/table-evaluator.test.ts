@@ -97,6 +97,36 @@ describe("absolute ($) references", () => {
   });
 });
 
+describe("Obsidian-safe anchors (§) and operators (· × ÷)", () => {
+  it("treats § as an absolute anchor, like $", () => {
+    expect(run([["5", "12", "=§a§1+§b§1"]]).values[0][2]).toBe(17);
+    expect(run([["5", "12"], ["7", "5"], ["=sum(§a§1:§b§2)", ""]]).values[2][0]).toBe(29);
+  });
+
+  it("supports § in matrix and column ranges", () => {
+    const { values } = run([
+      ["5", "12", "=[§a§1:§a§3]+[§b§1:§b§3]"],
+      ["7", "5", ""],
+      ["19", "10", ""],
+    ]);
+    expect(values.map((r) => r[2])).toEqual([17, 12, 29]);
+    expect(run([["3", "=sum(§a:§a)"], ["4", ""], ["5", ""]]).values[0][1]).toBe(9);
+  });
+
+  it("accepts · × ⋅ as multiplication and ÷ as division", () => {
+    expect(run([["6", "7", "=a1·b1"]]).values[0][2]).toBe(42);
+    expect(run([["6", "7", "=a1×b1"]]).values[0][2]).toBe(42);
+    expect(run([["10", "4", "=a1÷b1"]]).values[0][2]).toBe(2.5);
+    expect(run([["200", "=a1·60%"]]).values[0][1]).toBe(120);
+  });
+
+  it("shiftFormula keeps § anchors fixed and preserves the symbol", () => {
+    expect(shiftFormula("§a§1+b1", 1, 0)).toBe("§a§1+b2");
+    expect(shiftFormula("§a1", 1, 1)).toBe("§a2"); // column fixed, row moves
+    expect(shiftFormula("sum(§a:§a)", 0, 1)).toBe("sum(§a:§a)");
+  });
+});
+
 describe("parseColumnSpec", () => {
   it("parses single column letters into zero-based indices", () => {
     expect(parseColumnSpec("a, c, e")).toEqual([0, 2, 4]);

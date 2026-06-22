@@ -51,6 +51,22 @@ Werte ersetzt. Im **Quelltextmodus** siehst du die Formeln.
 **Erwartet:** `10`, `20`, `30`. Der Anker `$b$2` bleibt fix – `=$a$1`, `=$a1`,
 `=a$1` werden ebenfalls akzeptiert.
 
+### 3b. Obsidian-sichere Zeichen: `§` · `×` `÷`
+
+`$` rendert Obsidian als Mathe, `*` als Kursiv. Neutrale Alternativen, die
+Obsidian unverändert lässt:
+
+| Basis | Faktor | mit § und · | mit × und ÷  |
+| ----- | ------ | ----------- | ------------ |
+| 100   | 0.1    | =a2·§b§2    | =a2×2÷b2     |
+| 200   |        | =a3·§b§2    | =a3×2÷b2     |
+| 300   |        | =a4·§b§2    | =a4×2÷b2     |
+
+**Erwartet:** „mit § und ·" = `10`, `20`, `30` (identisch zu Abschnitt 3, aber
+ohne Render-Konflikte). „mit × und ÷" = `2000`, `4000`, `6000` (z. B.
+`100×2÷0.1`). Kurz: `·`/`×`/`⋅` = Multiplikation, `÷` = Division, `§` = Anker wie
+`$`. Beim **Fill-Down** bleibt `§…` genauso fix wie `$…`.
+
 ---
 
 ## 4. Bereiche (Ranges)
@@ -289,6 +305,7 @@ VLOOKUP(12) → größter Pkt-Wert ≤ 12 ist `11` → Note `2`.
 - [ ] 1 Grundrechnen & Bezüge
 - [ ] 2 Relative Bezüge
 - [ ] 3 Absolute `$`-Bezüge
+- [ ] 3b Obsidian-sichere Zeichen `§` `·` `×` `÷`
 - [ ] 4 Bereiche (inkl. `a:a`, `1:1`)
 - [ ] 5 Matrizen (Vektor, transpose, det)
 - [ ] 6 Einheiten
