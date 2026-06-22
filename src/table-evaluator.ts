@@ -304,29 +304,29 @@ export function shiftFormula(formula: string, dRow: number, dCol: number): strin
             continue;
         }
         // 3. letter + relative-row notation (a+1r, a-3r, a1r) - leave untouched
-        if ((m = rest.match(/^\$?[a-z][+-]?\d+r/))) {
+        if ((m = rest.match(/^[$§]?[a-z][+-]?\d+r/))) {
             out += m[0];
             i += m[0].length;
             continue;
         }
-        // 4. a1-style cell: shift letter and/or row honouring $ anchors
-        if ((m = rest.match(/^(\$?)([a-z])(\$?)(\d+)/))) {
+        // 4. a1-style cell: shift letter and/or row honouring $ / § anchors
+        if ((m = rest.match(/^([$§]?)([a-z])([$§]?)(\d+)/))) {
             const [, colA, letter, rowA, digits] = m;
-            out += colA + shiftLetter(letter, colA === "$") + rowA + shiftNum(digits, rowA === "$");
+            out += colA + shiftLetter(letter, colA !== "") + rowA + shiftNum(digits, rowA !== "");
             i += m[0].length;
             continue;
         }
         // 5. column range (a:a) - shift letters by column delta
-        if ((m = rest.match(/^(\$?)([a-z]):(\$?)([a-z])/))) {
+        if ((m = rest.match(/^([$§]?)([a-z]):([$§]?)([a-z])/))) {
             const [, a1, l1, a2, l2] = m;
-            out += a1 + shiftLetter(l1, a1 === "$") + ":" + a2 + shiftLetter(l2, a2 === "$");
+            out += a1 + shiftLetter(l1, a1 !== "") + ":" + a2 + shiftLetter(l2, a2 !== "");
             i += m[0].length;
             continue;
         }
         // 6. row range (1:1) - shift numbers by row delta
-        if ((m = rest.match(/^(\$?)(\d+):(\$?)(\d+)/))) {
+        if ((m = rest.match(/^([$§]?)(\d+):([$§]?)(\d+)/))) {
             const [, a1, n1, a2, n2] = m;
-            out += a1 + shiftNum(n1, a1 === "$") + ":" + a2 + shiftNum(n2, a2 === "$");
+            out += a1 + shiftNum(n1, a1 !== "") + ":" + a2 + shiftNum(n2, a2 !== "");
             i += m[0].length;
             continue;
         }
@@ -529,10 +529,10 @@ export class TableEvaluator {
     }
 
     ref2cords(ref: string, formulaRow = 0, formulaCol = 0): [number, number] | null {
-        // Strip Excel-style absolute-reference anchors ($a$1 -> a1). The anchors
-        // are only meaningful for fill-down (which rewrites the source text);
-        // for evaluation they resolve to the same coordinates.
-        ref = ref.replace(/\$/g, "");
+        // Strip absolute-reference anchors ($a$1 / §a§1 -> a1). The anchors are
+        // only meaningful for fill-down (which rewrites the source text); for
+        // evaluation they resolve to the same coordinates.
+        ref = ref.replace(/[$§]/g, "");
         const match = ref.match(/^([a-z]+|([+-]?)\d+c)(\d+|([+-]?)\d+r)$/);
 
         if (!match) {
@@ -563,7 +563,7 @@ export class TableEvaluator {
     }
 
     letter2col(letter: string): number {
-        return letter.replace(/\$/g, "").charCodeAt(0) - "a".charCodeAt(0);
+        return letter.replace(/[$§]/g, "").charCodeAt(0) - "a".charCodeAt(0);
     }
 
     number2row(nr: number): number {
@@ -602,6 +602,15 @@ export class TableEvaluator {
      */
     private convertPercentLiterals(formula: string): string {
         return formula.replace(/(\d+(?:\.\d+)?)%/g, "($1/100)");
+    }
+
+    /**
+     * Accept Obsidian-friendly operator symbols that don't trigger markdown
+     * rendering: `·`/`×`/`⋅` for multiplication (instead of `*`, which renders as
+     * italics) and `÷` for division. Converted to the mathjs operators.
+     */
+    private convertOperators(formula: string): string {
+        return formula.replace(/[·×⋅∙]/g, "*").replace(/÷/g, "/");
     }
 
 
@@ -683,7 +692,9 @@ export class TableEvaluator {
             }
 
             this.cellstatus[row][col] = cellstatus.computing;
-            const formula = this.convertPercentLiterals(this.formulaData[row][col].slice(1));
+            const formula = this.convertPercentLiterals(
+                this.convertOperators(this.formulaData[row][col].slice(1))
+            );
 
             if (debug) {
                 this.debug(`we are asked to fill in at ${row},${col} with formula: ${formula}`);
@@ -952,19 +963,20 @@ try {
             } else {
                 const restformula = formula.slice(i);
                 this.debug(`rest formula is:${restformula}`);
-                // `\$?` allows Excel-style absolute anchors ($a$1); they are
-                // stripped during resolution (see ref2cords / letter2col).
-                const matchCell = restformula.match(/^\$?([a-z]|[+-]?\d+c)\$?([+-]?\d+r|\d+)/);
+                // `[$§]?` allows absolute anchors. `$` is Excel-style but renders
+                // as LaTeX math in Obsidian; `§` is an Obsidian-safe alternative.
+                // Anchors are stripped during resolution (see ref2cords / letter2col).
+                const matchCell = restformula.match(/^[$§]?([a-z]|[+-]?\d+c)[$§]?([+-]?\d+r|\d+)/);
 
                 //const matchOp = restformula.match(/^[+\-*/]/);
 
                 const matchRange = restformula.match(
-                    /^\$?([a-z]|[+-]?\d+c)\$?([+-]?\d+r|\d+):\$?([a-z]|[+-]?\d+c)\$?([+-]?\d+r|\d+)/
+                    /^[$§]?([a-z]|[+-]?\d+c)[$§]?([+-]?\d+r|\d+):[$§]?([a-z]|[+-]?\d+c)[$§]?([+-]?\d+r|\d+)/
                 );
 
                 const matchMatrix = restformula.match(
                     //basically matchRange but between `[` `]`
-                    /^\[\$?([a-z]|[+-]\d+c)\$?([+-]\d+r|\d+):\$?([a-z]|[+-]\d+c)\$?([+-]\d+r|\d+)\]/
+                    /^\[[$§]?([a-z]|[+-]\d+c)[$§]?([+-]\d+r|\d+):[$§]?([a-z]|[+-]\d+c)[$§]?([+-]\d+r|\d+)\]/
                 );
 
                 const matchformula = restformula.match(/^[a-zA-Z]{3,}\(/);
@@ -974,9 +986,9 @@ try {
                 //const matchRange=restformula.match(/^[a-z]\d+:[a-z]\d+/); //normal range
                 //const matchRange = restformula.match(/^[a-z](?:\+|-)?\d+:[a-z](?:\+|-)?\d+/);
 
-                const matchRangeCol = restformula.match(/^\$?[a-z]:\$?[a-z]/); //column range
-                const matchRangeColMatrix = restformula.match(/^\[\$?[a-z]:\$?[a-z]\]/); //column range
-                const matchRangeRow = restformula.match(/^\$?\d+:\$?\d+/); //row range
+                const matchRangeCol = restformula.match(/^[$§]?[a-z]:[$§]?[a-z]/); //column range
+                const matchRangeColMatrix = restformula.match(/^\[[$§]?[a-z]:[$§]?[a-z]\]/); //column range
+                const matchRangeRow = restformula.match(/^[$§]?\d+:[$§]?\d+/); //row range
 
                 if (matchRange) {
                     /* normal range a3:b7 or a-3:b+7, or anything in between;
@@ -1019,7 +1031,7 @@ try {
                 } else if (matchRangeRow) {
                     this.debug(`we matched a row range`);
                     i += matchRangeRow[0].length - 1;
-                    const [start, end] = matchRangeRow[0].replace(/\$/g, "").split(":"); // Split the range into start and end (anchors stripped)
+                    const [start, end] = matchRangeRow[0].replace(/[$§]/g, "").split(":"); // Split the range into start and end (anchors stripped)
                     const startCol = 0;
                     const endCol = this.maxcols - 1;
                     const startRow = this.number2row(parseInt(start));

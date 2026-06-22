@@ -27,12 +27,26 @@ Excel-style absolute anchors are accepted on any reference: `$a$1`, `$a1`,
 when evaluating; it marks which part stays fixed when a formula is filled down
 (see fill-down).
 
-> **Obsidian caveat:** `$...$` is also Obsidian's inline-math syntax. Single
-> anchored cells are safe (e.g. `$b$2`, because a `$` before a digit is not math),
-> but an anchored *bounded matrix* like `[$j$2:$k$6]` makes Obsidian render part
-> of it as math and corrupts the formula. For a fixed lookup table, prefer a
-> **column range** `[j:k]` (or row range) — it has no `$`, and column ranges
-> already stay fixed when filling down.
+> **Obsidian caveat:** `$...$` is also Obsidian's inline-math syntax, so an
+> anchored *bounded matrix* like `[$j$2:$k$6]` gets rendered (and corrupted) as
+> math. To stay fully Obsidian-compatible, use **`§`** as the anchor instead of
+> `$` — Obsidian leaves `§` untouched, and CalcCraft treats them identically:
+> `[§j§2:§k§6]`, `=a2·§b§2`. (A fixed lookup table can also just use a column
+> range `[j:k]`, which has no anchor and already stays fixed when filling down.)
+
+### Obsidian-friendly operators
+Some operators clash with markdown rendering. CalcCraft accepts neutral
+alternatives that Obsidian leaves as plain text:
+
+| Type this | Means | Why |
+| --- | --- | --- |
+| `·` `×` `⋅` | `*` (multiply) | `*` renders as *italics* (`a*b*c*d` → emphasis) |
+| `÷` | `/` (divide) | optional, for readability |
+| `§` | `$` (absolute anchor) | `$…$` renders as LaTeX math |
+
+So `=round(c2·60%+(d2·50%+e2·50%)·40%,1)` stays readable while editing, and
+`=VLOOKUP(g2,[§j§2:§k§6],2,true)` works without math conflicts. The classic `*`,
+`/` and `$` still work too.
 
 Besides this `a1` reference style, the cells can be referenced using colum-row notation: `[0-9]+c[0-9]r`, where `c` stands for column and `r` stands for row. So for addressing the `b3` cell we could also write `2c3r` (column 2, row 3).
 The column-row notation supports also relative referencing by adding a `+` or `-` before the number. 

@@ -23,8 +23,14 @@ Tabelle arbeitet (keine Verweise zwischen mehreren Blättern), wurde das
 Die Gewichte stecken als Prozentwerte in der **Gesamt-Formel** (Spalte *g*):
 
 ```
-=round( UB*60% + (Klausur1*50% + Klausur2*50%)*40% , 1)
+=round( UB·60% + (Klausur1·50% + Klausur2·50%)·40% , 1)
 ```
+
+> Hinweis: Als Malzeichen wird hier **`·`** verwendet (statt `*`). Grund: `*`
+> rendert Obsidian als *Kursivschrift*; `·` bleibt unverändert. CalcCraft
+> versteht `·`, `×` und `*` gleichermaßen als Multiplikation. Genauso gibt es
+> **`§`** als Anker‑Alternative zu `$` (das Obsidian als Mathe‑Formel rendert),
+> z. B. `[§a§2:§b§9]`.
 
 - **Mündlich (UB): 60 %**, **Schriftlich gesamt: 40 %**
 - Innerhalb schriftlich: **Klausur 1: 50 %**, **Klausur 2: 50 %**
@@ -42,9 +48,9 @@ Klausur geschrieben war – hier ist 50/50 als sinnvoller Standard gesetzt.)*
 
 | Vorname | Name    | UB  | Klausur 1 | Klausur 2 | Note 1. Hj. | Gesamt                                | Note                       | Endnote                                | Skala Pkt | Skala Note | hide          |
 | ------- | ------- | --- | --------- | --------- | ----------- | ------------------------------------- | -------------------------- | -------------------------------------- | --------- | ---------- | ------------- |
-| Anna    | Müller  | 12  | 10        | 14        |             | =round(c2*60%+(d2*50%+e2*50%)*40%,1)  | =VLOOKUP(g2,[j:k],2,true)  | =IF(f2>0,round(h2*60%+f2*40%,1),h2)    | 0         | 6          | =hide(j,k,l)  |
-| Ben     | Schmidt | 9   | 8         | 11        | 3           | =round(c3*60%+(d3*50%+e3*50%)*40%,1)  | =VLOOKUP(g3,[j:k],2,true)  | =IF(f3>0,round(h3*60%+f3*40%,1),h3)    | 1         | 5.3        |               |
-| Cara    | Wolf    | 14  | 15        | 13        |             | =round(c4*60%+(d4*50%+e4*50%)*40%,1)  | =VLOOKUP(g4,[j:k],2,true)  | =IF(f4>0,round(h4*60%+f4*40%,1),h4)    | 2         | 5          |               |
+| Anna    | Müller  | 12  | 10        | 14        |             | =round(c2·60%+(d2·50%+e2·50%)·40%,1)  | =VLOOKUP(g2,[j:k],2,true)  | =IF(f2>0,round(h2·60%+f2·40%,1),h2)    | 0         | 6          | =hide(j,k,l)  |
+| Ben     | Schmidt | 9   | 8         | 11        | 3           | =round(c3·60%+(d3·50%+e3·50%)·40%,1)  | =VLOOKUP(g3,[j:k],2,true)  | =IF(f3>0,round(h3·60%+f3·40%,1),h3)    | 1         | 5.3        |               |
+| Cara    | Wolf    | 14  | 15        | 13        |             | =round(c4·60%+(d4·50%+e4·50%)·40%,1)  | =VLOOKUP(g4,[j:k],2,true)  | =IF(f4>0,round(h4·60%+f4·40%,1),h4)    | 2         | 5          |               |
 |         |         |     |           |           |             |                                       |                            |                                        | 3         | 4.7        |               |
 |         |         |     |           |           |             |                                       |                            |                                        | 4         | 4.3        |               |
 |         |         |     |           |           |             |                                       |                            |                                        | 5         | 4          |               |
